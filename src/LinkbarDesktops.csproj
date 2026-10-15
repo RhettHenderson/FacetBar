@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>LinkbarDesktops</AssemblyName>
+    <RootNamespace>LinkbarDesktops</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Version>1.0.0</Version>
+    <Product>Linkbar Desktops</Product>
+    <Description>Runs one Linkbar per Windows virtual desktop and shows only the current desktop's bar.</Description>
+  </PropertyGroup>
+
+  <!-- Ship the Linkbar release (../Linkbar) in a Linkbar folder next to LinkbarDesktops.exe. -->
+  <ItemGroup>
+    <None Include="..\Linkbar\**\*" LinkBase="Linkbar" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
