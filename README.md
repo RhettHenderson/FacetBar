@@ -1,67 +1,131 @@
-# Linkbar Desktops
+# DeskBar
 
-Gives each Windows 10 virtual desktop its own [Linkbar](https://github.com/ATGH15102AFMLD/Linkbar) with its own pinned apps.
+DeskBar is a modular replacement for the Windows 10 taskbar. Its main feature is that **each virtual desktop has its own pinned apps**, and there's also a shared set of pins that shows on every desktop.
 
-A small tray app runs one Linkbar instance per virtual desktop. When you switch desktops, it shows that desktop's bar and hides the others. All bars sit in the same spot, and only the visible bar reserves screen space, so maximized windows never get pushed down by hidden bars.
+It's built on [ManagedShell](https://github.com/cairoshell/ManagedShell) (Apache-2.0), the same library the RetroBar taskbar uses.
 
-## Requirements
+## Features
 
-- Windows 10 (Windows 11 should also work; it stores the current desktop in a slightly different registry key, which the app checks)
-- .NET 8 Desktop Runtime
-- Linkbar 1.6.9 (included in `Linkbar\`)
+| Part | What it does |
+|---|---|
+| **Start** | Opens the Start menu. Right-click opens the Win+X menu. |
+| **Search** | Shows live [Everything](https://www.voidtools.com/) results as you type (more below). |
+| **Task View + desktop name** | Shows which virtual desktop you're on. Click it for Task View. |
+| **Pinned and running apps** | Pinned apps for the current desktop, merged with the windows that are open on it. Hover for live window thumbnails; hover a thumbnail to peek at that window. |
+| **Notification area** | Tray icons, with a ^ flyout for the ones you choose to hide. Drag icons between the bar and the flyout. |
+| **Clock** | Time and date. Click for a calendar. |
+| **Action Center** | Opens Windows' Action Center. |
+| **Show desktop** | The thin strip at the far right minimizes or restores all windows. |
 
-## Running it
+The bar also:
+- **Scaling:** follows each monitor's Windows display scale. At 100% size it's as tall as the Windows 10 taskbar.
+- **Auto-hide:** can slide away and reappear when the mouse touches the screen edge.
+- **Monitors:** runs on every monitor, and by default each bar only lists the windows on its own monitor.
+- **Windows taskbar:** hides the Windows taskbar while it runs, and restores it when it exits, even after a crash.
 
-Build:
+## Running
+
+Build it:
 
 ```bash
-dotnet publish src/LinkbarDesktops.csproj -c Release -o dist
+dotnet publish src/DeskBar/DeskBar.csproj -c Release -o publish/DeskBar
 ```
 
-Then run `dist\LinkbarDesktops.exe`. A Linkbar icon appears in the system tray.
+Then run `publish\DeskBar\DeskBar.exe`. It needs the .NET 8 Desktop Runtime.
 
-- **Pin apps:** drag shortcuts onto the bar, or use the bar's right-click menu, the same as normal Linkbar. Each desktop's links live in its own folder.
-- **New desktops:** the first time you visit a desktop, it gets an empty bar automatically.
-- **Make all bars look the same:** set up one bar's appearance in Linkbar's *Properties* (edge, icon size, colors, etc.), then choose *Copy this bar's style to all desktops* from the tray menu. Only the look and position are copied, not the links. Bars for desktops you haven't visited yet will use that style too.
-
-### Tray menu
-
-| Item | What it does |
+| Command | What it does |
 |---|---|
-| Open links folder for… | Opens a desktop's shortcut folder in Explorer. Left-clicking the tray icon opens the current desktop's folder. |
-| Copy this bar's style to all desktops | Copies the current bar's settings, except its links folder, to every other bar and restarts them. |
-| Restart all bars | Closes and relaunches every bar. |
-| Open data folder | Opens `%APPDATA%\LinkbarDesktops`. |
-| Start with Windows | Adds or removes a `HKCU\...\Run` entry. |
-| Exit | Closes all bars and quits. |
+| `DeskBar.exe` | Start the bar |
+| `DeskBar.exe --exit` | Close a running DeskBar |
+| `DeskBar.exe --restore-taskbar` | Bring back the Windows taskbar if it's ever stuck hidden |
+| `DeskBar.exe --selftest` | Check desktops, pins, shortcuts and Everything without opening a bar; writes `selftest.txt` |
 
-`LinkbarDesktops.exe --exit` closes a running instance from a script.
+To configure it, right-click an empty part of the bar and choose **DeskBar settings…**. Settings include position, size, scaling, auto-hide, monitors, the clock, the search box, the layout and the tray icons. **Start with Windows** is also there.
 
-## Where things are stored
+If the old Linkbar-based version is running, DeskBar asks it to quit when it starts. On first run, the shortcuts you had pinned in the old version are imported.
+
+## Pinned apps
+
+| Action | How |
+|---|---|
+| Pin an app | Right-click a running app and choose **Pin to this desktop** or **Pin to all desktops**. You can also drag files or shortcuts onto the bar, or right-click a search result. |
+| Move a pin between "this desktop" and "all desktops" | Right-click it and toggle **Show on all desktops**. |
+| Reorder pins | Drag them. |
+| Start a new window | Middle-click or Shift+click the app. |
+| Switch to or minimize a window | Click the app. If it has several windows, click to choose one from the thumbnails. |
+
+Pins are stored in `%APPDATA%\DeskBar\pins.json`.
+
+## Search (Everything)
+
+The search box talks to your running Everything instance directly through its IPC interface, so no SDK or extra download is needed. Results put apps and exact name matches first, and push system clutter like WinSxS to the bottom.
+
+| Keys | What it does |
+|---|---|
+| ↑ / ↓ | Choose a result |
+| Enter | Open it |
+| Ctrl+Enter | Show it in its folder |
+| Shift+Enter | Open the full results in Everything |
+| Esc | Clear the box, or close it if it's already empty |
+| Right-click a result | Run as administrator, pin, copy path, properties |
+
+If you'd rather have the box open your launcher (for example Everything's window or Flow Launcher) with a hotkey such as Alt+Space, change **Search box → When I use it** in Settings.
+
+## Files
 
 ```
-%APPDATA%\LinkbarDesktops\
-  config.json          LinkbarPath: leave empty to use the Linkbar folder next to the exe
-  template.lbr         style used for new desktops (written by "Copy this bar's style…")
+%APPDATA%\DeskBar\
+  settings.json        all settings (safe to hand-edit; missing values use defaults)
+  pins.json            pinned apps: "AllDesktops" plus one list per desktop GUID
   log.txt              diagnostics
-  Desktops\<desktop GUID>\
-    bar.lbr            this desktop's Linkbar settings
-    links\             this desktop's shortcuts
-    desktop-name.txt   which desktop this folder belongs to
+  Plugins\             extra widget DLLs (see below)
+  ImportedLinks\       shortcuts carried over from the Linkbar version
 ```
 
-Folders are named by the desktop's GUID, so renaming a desktop keeps its bar. If you delete a desktop in Task View, its bar is closed but its folder is kept.
+## Extending it
 
-These bars are separate from any bars you create with plain Linkbar (which live in `%APPDATA%\Linkbar\User bars`). Linkbar's own autostart won't launch them.
+Every part of the bar is a widget that implements `DeskBar.Widgets.IBarWidget`:
 
-## How it works
+```csharp
+public sealed class CpuWidget : IBarWidget
+{
+    public string Id => "cpu";
+    public string DisplayName => "CPU usage";
+    public FrameworkElement Create(BarContext context) => new TextBlock { Text = "CPU 3%" };
+}
+```
 
-- **Current desktop:** read from the registry values Explorer maintains (`HKCU\...\Explorer\SessionInfo\<session>\VirtualDesktops\CurrentVirtualDesktop`, plus `...\Explorer\VirtualDesktops` for the desktop list and names). The app gets change notifications through `RegNotifyChangeKeyValue`, with a 1-second poll as a fallback. It doesn't use the undocumented virtual desktop COM interfaces, which break between Windows builds.
-- **Show/hide:** Linkbar windows are tool windows, so Windows shows them on every desktop. To hide a bar, the app hides its window and removes its appbar registration (`ABM_REMOVE`), which frees the screen space. To show a bar, it re-registers the window with Linkbar's callback message (`WM_USER+1`) and sends Linkbar an `ABN_POSCHANGED`, so Linkbar re-runs its own positioning code.
-- **Explorer restarts:** Linkbar re-registers every bar when Explorer restarts. The app listens for `TaskbarCreated` and hides the non-current bars again.
-- **Resource use:** each idle Linkbar instance uses about 25–30 MB of RAM and essentially no CPU.
+There are two ways to add one:
+- **Inside DeskBar:** register it in `WidgetRegistry.Initialize()`.
+- **As a plugin:** build it in a separate class library that references `DeskBar.dll`, and drop the DLL into `%APPDATA%\DeskBar\Plugins`.
 
-## Limitations
+Either way, the widget then shows up in **Settings → Layout**.
 
-- **Autohide:** Windows allows only one autohide appbar per screen edge, so enabling Linkbar's autohide on several bars on the same edge won't work. Autohide bars are shown and hidden but their appbar state is left alone.
-- **Closing a bar from its own menu:** a bar closed with Linkbar's *Close* item stays closed until you leave that desktop and come back. *Remove linkbar* deletes its settings, and you get a fresh empty bar on your next visit.
+`BarContext` gives widgets access to:
+- ManagedShell's services (tasks, tray, appbars)
+- the virtual desktop service
+- the pin store
+- the settings
+- popup placement and auto-hide helpers
+
+Widgets that implement `IDisposable` are disposed when the bar is rebuilt.
+
+### Source layout
+
+```
+src/DeskBar/
+  App.xaml(.cs)        startup, single instance, command-line switches, crash safety
+  Bar/                 BarWindow (ManagedShell AppBarWindow), BarManager (one bar per monitor)
+  Core/                settings, virtual desktops, pins, .lnk reading, taskbar guard, theme, self-test
+  Widgets/             start, search + Everything client, tray, clock, simple widgets
+  Widgets/Tasks/       task list, task buttons, window previews (DWM thumbnails)
+  Settings/            settings window
+  Themes/Dark.xaml     colours, button style, dark menus and tooltips
+```
+
+## Limitations and ideas
+
+- **Edges:** only the top and bottom edges are supported. Left and right would need a vertical layout.
+- **Win+1…9:** these shortcuts still go to the hidden Windows taskbar, because Explorer owns them.
+- **Progress bars and overlay badges on task buttons:** these only appear when Windows routes them to DeskBar. Explorer usually keeps them.
+- **Ideas for later:** jump lists, a volume/media widget, a system monitor, and per-desktop accent colours or wallpapers.

@@ -1,9 +1,54 @@
 using System.Diagnostics;
+using System.Windows.Threading;
 using Microsoft.Win32;
 
-namespace LinkbarDesktops;
+namespace DeskBar.Core;
 
-internal sealed record DesktopInfo(Guid Id, int Index, string Name);
+public sealed record DesktopInfo(Guid Id, int Index, string Name);
+
+/// <summary>Tracks the current virtual desktop and raises events on the UI thread when it changes.</summary>
+public sealed class VirtualDesktopService : IDisposable
+{
+    private readonly VirtualDesktopWatcher _watcher = new();
+    private readonly Dispatcher _dispatcher;
+
+    public IReadOnlyList<DesktopInfo> Desktops { get; private set; }
+    public DesktopInfo Current { get; private set; }
+
+    /// <summary>The user switched desktops (or the current one was renamed).</summary>
+    public event EventHandler? CurrentChanged;
+    /// <summary>Desktops were added, removed, reordered or renamed.</summary>
+    public event EventHandler? DesktopsChanged;
+
+    internal VirtualDesktopService(Dispatcher dispatcher)
+    {
+        _dispatcher = dispatcher;
+        Desktops = VirtualDesktops.GetDesktops();
+        Current = VirtualDesktops.GetCurrent(Desktops);
+        _watcher.Changed += () => _dispatcher.BeginInvoke(Refresh);
+        _watcher.Start();
+    }
+
+    private void Refresh()
+    {
+        var desktops = VirtualDesktops.GetDesktops();
+        var current = VirtualDesktops.GetCurrent(desktops);
+
+        bool listChanged = !desktops.SequenceEqual(Desktops);
+        bool currentChanged = current != Current;
+        Desktops = desktops;
+        Current = current;
+
+        if (listChanged) DesktopsChanged?.Invoke(this, EventArgs.Empty);
+        if (currentChanged)
+        {
+            Log.Write($"Virtual desktop: {current.Name} ({current.Id})");
+            CurrentChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    public void Dispose() => _watcher.Dispose();
+}
 
 /// <summary>
 /// Reads virtual desktop state from the registry keys Explorer maintains. This avoids the
