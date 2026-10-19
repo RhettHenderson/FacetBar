@@ -32,8 +32,14 @@ public sealed class PinnedApp
     [JsonIgnore]
     public string? EffectiveAppId { get { Resolve(); return AppUserModelId ?? _linkAppId; } }
 
+    /// <summary>True for Store/MSIX apps, which must be started by app id rather than by path.</summary>
+    [JsonIgnore]
+    public bool IsPackaged { get { Resolve(); return _isPackaged; } }
+
     [JsonIgnore]
     public ImageSource Icon => _icon ??= LoadIcon();
+
+    private bool _isPackaged;
 
     private void Resolve()
     {
@@ -47,14 +53,22 @@ public sealed class PinnedApp
         }
         if (target != null && target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             _targetExe = System.IO.Path.GetFullPath(target).ToLowerInvariant();
+
+        // Pins pointing into WindowsApps break when the app updates (the folder name has the version in it).
+        if (string.IsNullOrEmpty(Path) || PackagedApps.IsPackagedPath(target))
+        {
+            _isPackaged = true;
+            if (AppUserModelId == null && _linkAppId == null && target != null)
+                _linkAppId = PackagedApps.AppIdForPath(target);
+        }
     }
 
     private ImageSource LoadIcon()
     {
         try
         {
-            if (string.IsNullOrEmpty(Path) && AppUserModelId != null)
-                return new ShellItem($@"shell:AppsFolder\{AppUserModelId}").LargeIcon;
+            if (IsPackaged && EffectiveAppId is { } appId)
+                return new ShellItem($@"shell:AppsFolder\{appId}").LargeIcon;
             return IconImageConverter.GetImageFromAssociatedIcon(Path, IconSize.Large);
         }
         catch (Exception ex)
@@ -68,10 +82,10 @@ public sealed class PinnedApp
     {
         try
         {
-            if (string.IsNullOrEmpty(Path) && AppUserModelId != null)
+            if (IsPackaged && EffectiveAppId is { } appId)
             {
-                if (!ShellHelper.ActivateApplication(AppUserModelId))
-                    Process.Start(new ProcessStartInfo("explorer.exe", $@"shell:AppsFolder\{AppUserModelId}") { UseShellExecute = true });
+                if (!ShellHelper.ActivateApplication(appId))
+                    Process.Start(new ProcessStartInfo("explorer.exe", $@"shell:AppsFolder\{appId}") { UseShellExecute = true });
                 return;
             }
             var dir = System.IO.Path.GetDirectoryName(TargetExe ?? Path);
@@ -80,6 +94,10 @@ public sealed class PinnedApp
                 UseShellExecute = true,
                 WorkingDirectory = dir != null && Directory.Exists(dir) ? dir : "",
             });
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            // ERROR_CANCELLED: the user dismissed a UAC / "broken shortcut" prompt.
         }
         catch (Exception ex)
         {

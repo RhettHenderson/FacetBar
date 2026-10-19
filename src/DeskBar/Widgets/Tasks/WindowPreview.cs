@@ -120,7 +120,8 @@ internal sealed class WindowPreview
     {
         var windows = group.Windows.ToList();
         bool thumbnails = windows.Count <= MaxThumbnails;
-        var panel = new StackPanel { Orientation = thumbnails ? Orientation.Horizontal : Orientation.Vertical };
+        // Thumbnails line up along the bar: side by side on a horizontal bar, stacked on a vertical one.
+        var panel = new StackPanel { Orientation = thumbnails && !_context.IsVertical ? Orientation.Horizontal : Orientation.Vertical };
         foreach (var w in windows)
             panel.Children.Add(thumbnails ? ThumbnailItem(w) : ListItem(w));
         _root.Child = panel;

@@ -22,7 +22,7 @@ internal sealed class SearchWidget : IBarWidget
 
     public FrameworkElement Create(BarContext context) => context.Settings.SearchMode switch
     {
-        SearchMode.Hidden => new Border { Width = 0 },
+        SearchMode.Hidden => new Border { Visibility = Visibility.Collapsed },
         SearchMode.Hotkey => CreateHotkeyBox(context),
         _ => new EverythingSearchBox(context),
     };
@@ -30,6 +30,8 @@ internal sealed class SearchWidget : IBarWidget
     private static FrameworkElement CreateHotkeyBox(BarContext context)
     {
         var hotkey = context.Settings.SearchHotkey;
+        if (context.IsVertical)
+            return Ui.BarGlyphButton(context, "", $"Search ({hotkey})", 40, () => Hotkeys.Send(hotkey));
         var box = SearchBoxChrome(context, new TextBlock
         {
             Text = $"Search ({hotkey})",
@@ -75,9 +77,16 @@ internal sealed class SearchWidget : IBarWidget
         private List<EverythingResult> _results = [];
         private int _selected;
 
+        /// <summary>
+        /// On a vertical bar there's no room for a text box, so the bar shows a magnifier button and the
+        /// text box lives at the top of the flyout instead.
+        /// </summary>
+        private readonly bool _compact;
+
         public EverythingSearchBox(BarContext context)
         {
             _context = context;
+            _compact = context.IsVertical;
             _input = new TextBox
             {
                 Background = Brushes.Transparent,
@@ -101,7 +110,20 @@ internal sealed class SearchWidget : IBarWidget
             inputHost.Children.Add(_input);
             _chrome = SearchBoxChrome(context, inputHost);
             _glyph = (TextBlock)((Grid)_chrome.Child).Children[0];
-            Content = _chrome;
+            FrameworkElement anchor = _chrome;
+            if (_compact)
+            {
+                _chrome.Width = double.NaN;
+                _chrome.Height = 36;
+                _chrome.Margin = new Thickness(8);
+                var button = Ui.BarGlyphButton(context, "", "Search (Everything)", 40, ToggleCompactPopup);
+                anchor = button;
+                Content = button;
+            }
+            else
+            {
+                Content = _chrome;
+            }
 
             var footer = new Button
             {
@@ -113,6 +135,7 @@ internal sealed class SearchWidget : IBarWidget
             footer.Click += (_, _) => OpenInEverything();
 
             var panel = new StackPanel();
+            if (_compact) panel.Children.Add(_chrome);
             panel.Children.Add(_status);
             panel.Children.Add(_rows);
             panel.Children.Add(new Border { Height = 1, Background = Ui.Res("SeparatorBrush") });
@@ -120,14 +143,14 @@ internal sealed class SearchWidget : IBarWidget
 
             _popup = new Popup
             {
-                PlacementTarget = _chrome,
+                PlacementTarget = anchor,
                 Placement = context.PopupPlacement,
                 StaysOpen = true, // closed explicitly when the box loses focus
                 AllowsTransparency = true,
                 Child = new Border
                 {
                     Style = (Style)Application.Current.FindResource("PopupBorder"),
-                    Width = Math.Max(_chrome.Width, 560),
+                    Width = _compact ? 560 : Math.Max(_chrome.Width, 560),
                     Child = panel,
                 },
             };
@@ -159,6 +182,20 @@ internal sealed class SearchWidget : IBarWidget
             };
         }
 
+        private void ToggleCompactPopup()
+        {
+            if (_popup.IsOpen)
+            {
+                Finish();
+                return;
+            }
+            _context.Bar.ActivateForInput();
+            _status.Visibility = Visibility.Collapsed;
+            _popup.IsOpen = true;
+            // The text box only exists once the popup is open.
+            Dispatcher.BeginInvoke(() => _input.Focus(), DispatcherPriority.Input);
+        }
+
         private bool IsInPopup(DependencyObject d)
         {
             for (var current = d; current != null; current = VisualTreeHelper.GetParent(current) ?? LogicalTreeHelper.GetParent(current))
@@ -182,7 +219,17 @@ internal sealed class SearchWidget : IBarWidget
             var query = _input.Text.Trim();
             if (query.Length == 0)
             {
-                _popup.IsOpen = false;
+                if (_compact)
+                {
+                    // Keep the flyout (it holds the text box); just clear the results.
+                    _results = [];
+                    RenderRows();
+                    _status.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    _popup.IsOpen = false;
+                }
                 return;
             }
 
@@ -307,9 +354,8 @@ internal sealed class SearchWidget : IBarWidget
                 case Key.Down: Select(_selected + 1); e.Handled = true; break;
                 case Key.Up: Select(_selected - 1); e.Handled = true; break;
                 case Key.Escape:
-                    if (_input.Text.Length > 0) _input.Clear();
-                    else Keyboard.ClearFocus();
-                    _popup.IsOpen = false;
+                    if (_input.Text.Length > 0 && _compact) _input.Clear(); // keep the flyout: it holds the box
+                    else Finish();
                     e.Handled = true;
                     break;
                 case Key.Enter:

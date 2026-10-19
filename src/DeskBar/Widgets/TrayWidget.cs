@@ -33,7 +33,8 @@ internal sealed class TrayControl : StackPanel, IDisposable
 
     private readonly BarContext _context;
     private readonly NotificationArea _area;
-    private readonly StackPanel _pinned = new() { Orientation = Orientation.Horizontal, Background = Brushes.Transparent, AllowDrop = true };
+    // A WrapPanel so icons form rows on a narrow vertical bar (on a horizontal bar it's one row).
+    private readonly WrapPanel _pinned = new() { Orientation = Orientation.Horizontal, Background = Brushes.Transparent, AllowDrop = true, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly WrapPanel _overflowIcons = new() { Width = 5 * 40, Background = Brushes.Transparent, AllowDrop = true, MinHeight = 40 };
     private readonly Popup _overflow;
     private readonly Button _chevron;
@@ -43,10 +44,18 @@ internal sealed class TrayControl : StackPanel, IDisposable
     {
         _context = context;
         _area = context.Shell.NotificationArea;
-        Orientation = Orientation.Horizontal;
+        Orientation = context.IsVertical ? Orientation.Vertical : Orientation.Horizontal;
 
-        bool bottom = context.Edge == BarEdge.Bottom;
-        _chevron = Ui.GlyphButton(bottom ? "" : "", "Show hidden icons", 24, () => _overflow!.IsOpen = !_overflow.IsOpen, 12);
+        // The ^ arrow points away from the screen edge the bar is on.
+        string chevronGlyph = context.Edge switch
+        {
+            BarEdge.Top => "",
+            BarEdge.Left => "",
+            BarEdge.Right => "",
+            _ => "",
+        };
+        _chevron = Ui.BarGlyphButton(context, chevronGlyph, "Show hidden icons", context.IsVertical ? 28 : 24,
+            () => _overflow!.IsOpen = !_overflow.IsOpen, glyphSize: 12);
         _chevron.AllowDrop = true;
         _chevron.DragEnter += (_, e) => { if (e.Data.GetDataPresent(IconDragFormat)) _overflow!.IsOpen = true; };
 
@@ -122,7 +131,9 @@ internal sealed class TrayControl : StackPanel, IDisposable
             foreach (var element in _pinned.Children.OfType<TrayIconElement>())
             {
                 if (element.Icon == icon) continue;
-                if (e.GetPosition(element).X > element.ActualWidth / 2) index++;
+                // Count icons before the drop point in reading order (rows wrap on vertical bars).
+                var p = e.GetPosition(element);
+                if (p.Y > element.ActualHeight || (p.Y >= 0 && p.X > element.ActualWidth / 2)) index++;
             }
             icon.Pin(index);
         }

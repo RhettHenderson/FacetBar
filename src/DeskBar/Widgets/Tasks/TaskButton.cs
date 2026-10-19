@@ -21,8 +21,9 @@ internal sealed class TaskButton : Border
     private readonly Image _icon = new() { Width = 24, Height = 24 };
     private readonly Image _overlay = new() { Width = 14, Height = 14, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom };
     private readonly TextBlock _title = new() { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 6, 0) };
-    private readonly Border _indicator = new() { Height = 2 };
-    private readonly Border _progress = new() { HorizontalAlignment = HorizontalAlignment.Left, Opacity = 0.55 };
+    private readonly Border _indicator = new();
+    private readonly Border _progress = new() { Opacity = 0.55, RenderTransformOrigin = new Point(0, 0.5) };
+    private readonly ScaleTransform _progressScale = new(0, 1);
     private readonly DispatcherTimer _hoverTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
     private readonly DispatcherTimer _dragActivateTimer = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private readonly List<ApplicationWindow> _subscribed = [];
@@ -38,9 +39,18 @@ internal sealed class TaskButton : Border
         Group = group;
 
         bool titles = context.Settings.ShowWindowTitles;
-        Width = titles ? 168 : 48;
-        Margin = new Thickness(0, 0, 1, 0);
+        if (context.IsVertical)
+        {
+            Height = 40; // full bar width
+            Margin = new Thickness(0, 0, 0, 1);
+        }
+        else
+        {
+            Width = titles ? 168 : 48;
+            Margin = new Thickness(0, 0, 1, 0);
+        }
         Background = Brushes.Transparent;
+        _progress.RenderTransform = _progressScale;
         SnapsToDevicePixels = true;
         AllowDrop = true;
 
@@ -56,8 +66,20 @@ internal sealed class TaskButton : Border
         content.Children.Add(iconHost);
         if (titles) content.Children.Add(_title);
 
-        _indicator.VerticalAlignment = context.Edge == BarEdge.Top ? VerticalAlignment.Top : VerticalAlignment.Bottom;
-        _indicator.HorizontalAlignment = HorizontalAlignment.Center;
+        // The "running" line sits on the screen-edge side of the button, like Windows'.
+        switch (context.Edge)
+        {
+            case BarEdge.Left or BarEdge.Right:
+                _indicator.Width = 2;
+                _indicator.HorizontalAlignment = context.Edge == BarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                _indicator.VerticalAlignment = VerticalAlignment.Center;
+                break;
+            default:
+                _indicator.Height = 2;
+                _indicator.VerticalAlignment = context.Edge == BarEdge.Top ? VerticalAlignment.Top : VerticalAlignment.Bottom;
+                _indicator.HorizontalAlignment = HorizontalAlignment.Center;
+                break;
+        }
 
         var layers = new Grid();
         layers.Children.Add(_progress);
@@ -136,7 +158,11 @@ internal sealed class TaskButton : Border
 
         _indicator.Visibility = g.IsRunning ? Visibility.Visible : Visibility.Collapsed;
         _indicator.Background = Ui.Res("AccentBrush");
-        _indicator.Width = active || _hovered ? Width : Width - 12;
+        // Full length when active/hovered, slightly shorter when just running.
+        double length = _context.IsVertical ? Height : Width;
+        double indicatorLength = active || _hovered ? length : length - 12;
+        if (_context.IsVertical) _indicator.Height = indicatorLength;
+        else _indicator.Width = indicatorLength;
         _indicator.Opacity = g.Windows.Count > 1 && !active ? 0.85 : 1;
 
         UpdateProgress(first);
@@ -159,7 +185,7 @@ internal sealed class TaskButton : Border
         };
         double fraction = state == NativeMethods.TBPFLAG.TBPF_INDETERMINATE ? 1
             : w!.ProgressValue <= 100 ? w.ProgressValue / 100.0 : w.ProgressValue / 65535.0;
-        _progress.Width = Width * Math.Clamp(fraction, 0, 1);
+        _progressScale.ScaleX = Math.Clamp(fraction, 0, 1); // fills from the left whatever the button's size
     }
 
     // ------------------------------------------------------------------ mouse

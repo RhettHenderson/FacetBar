@@ -37,11 +37,17 @@ internal static class SelfTest
         Check("Pins", () =>
         {
             var store = new PinStore();
+            static string Describe(PinnedApp p)
+            {
+                if (!p.IsPackaged) return $"{p.Name} -> {p.TargetExe ?? p.Path}";
+                // Store apps must resolve to an app id or they can't be launched or matched to their windows.
+                if (p.EffectiveAppId == null) throw new InvalidOperationException($"no app id found for Store app pin '{p.Name}'");
+                return $"{p.Name} -> Store app {p.EffectiveAppId}";
+            }
             var lines = desktops.Select(d =>
             {
                 var pins = store.GetPins(d.Id);
-                return $"{d.Name}: {pins.Count}" + (pins.Count == 0 ? "" :
-                    $" [{string.Join("; ", pins.Select(p => $"{p.Name} -> {p.TargetExe ?? p.EffectiveAppId ?? p.Path}"))}]");
+                return $"{d.Name}: {pins.Count}" + (pins.Count == 0 ? "" : $" [{string.Join("; ", pins.Select(Describe))}]");
             });
             return string.Join(" | ", lines);
         });

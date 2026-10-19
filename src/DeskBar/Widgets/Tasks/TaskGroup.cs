@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using DeskBar.Core;
 using ManagedShell.WindowsTasks;
 
@@ -35,32 +34,15 @@ public sealed class TaskGroup
 
     public string Tooltip => Windows.Count == 1 ? Windows[0].Title : Name;
 
-    /// <summary>Executable to start for "open a new window" when the group isn't pinned.</summary>
-    public string? Executable => Windows.Select(w => w.WinFileName).FirstOrDefault(p => !string.IsNullOrEmpty(p));
-
     public void LaunchNew()
     {
-        if (Pin != null)
-        {
-            Pin.Launch();
-            return;
-        }
-        var exe = Executable;
-        if (exe == null || exe.EndsWith("ApplicationFrameHost.exe", StringComparison.OrdinalIgnoreCase)) return;
-        try
-        {
-            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe)! });
-        }
-        catch (Exception ex)
-        {
-            Log.Error($"Starting {exe}", ex);
-        }
+        // An unpinned app is started the same way a pin for it would be (by app id for Store apps).
+        (Pin ?? CreatePin())?.Launch();
     }
 
     // ------------------------------------------------------------------ matching windows to apps
 
-    public static string? WindowAppId(ApplicationWindow w) =>
-        string.IsNullOrWhiteSpace(w.AppUserModelID) ? null : w.AppUserModelID;
+    public static string? WindowAppId(ApplicationWindow w) => PackagedApps.AppIdForWindow(w);
 
     public static string? WindowExe(ApplicationWindow w) =>
         string.IsNullOrWhiteSpace(w.WinFileName) ? null : w.WinFileName.ToLowerInvariant();
@@ -83,9 +65,9 @@ public sealed class TaskGroup
         var w = Windows.FirstOrDefault();
         if (w == null) return null;
         var appId = WindowAppId(w);
-        if (w.IsUWP)
-            return appId == null ? null : new PinnedApp { AppUserModelId = appId, Name = Name };
         var exe = w.WinFileName;
+        if (w.IsUWP || PackagedApps.IsPackagedPath(exe))
+            return appId == null ? null : new PinnedApp { AppUserModelId = appId, Name = Name }; // launched by id, survives updates
         if (string.IsNullOrEmpty(exe)) return null;
         var pin = PinnedApp.FromPath(exe);
         pin.AppUserModelId = appId; // keeps apps with explicit ids (Chrome profiles, etc.) matched correctly

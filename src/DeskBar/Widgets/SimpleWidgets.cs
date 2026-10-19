@@ -29,8 +29,21 @@ internal static class Ui
             Width = width,
             Content = Glyph(glyph, glyphSize),
             ToolTip = tooltip,
+            Focusable = false, // clicking bar buttons shouldn't steal focus (e.g. from the search box)
         };
         button.Click += (_, _) => onClick();
+        return button;
+    }
+
+    /// <summary>A glyph button sized along the bar: <paramref name="length"/> wide on a horizontal bar, tall on a vertical one.</summary>
+    public static Button BarGlyphButton(BarContext context, string glyph, string tooltip, double length, Action onClick, double glyphSize = 16)
+    {
+        var button = GlyphButton(glyph, tooltip, length, onClick, glyphSize);
+        if (context.IsVertical)
+        {
+            button.Width = double.NaN;
+            button.Height = length;
+        }
         return button;
     }
 }
@@ -51,7 +64,7 @@ internal sealed class StartButtonWidget : IBarWidget
             Height = 16,
             Stretch = Stretch.Uniform,
         };
-        var button = new Button { Style = Ui.ButtonStyle, Width = 48, Content = logo, ToolTip = "Start" };
+        var button = context.Along(new Button { Style = Ui.ButtonStyle, Content = logo, ToolTip = "Start" }, context.IsVertical ? 40 : 48);
         button.MouseEnter += (_, _) => logo.Fill = Ui.Res("AccentBrush");
         button.MouseLeave += (_, _) => logo.Fill = Ui.Res("ForegroundBrush");
         button.Click += (_, _) => ShellHelper.ShowStartMenu();
@@ -75,17 +88,30 @@ internal sealed class DesktopNameWidget : IBarWidget
     private sealed class DesktopNameButton : Button, IDisposable
     {
         private readonly BarContext _context;
-        private readonly TextBlock _name = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        private readonly TextBlock _name = new() { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
 
         public DesktopNameButton(BarContext context)
         {
             _context = context;
             Style = Ui.ButtonStyle;
-            Padding = new Thickness(12, 0, 12, 0);
             ToolTip = "Task View (Win+Tab)";
-            var panel = new StackPanel { Orientation = Orientation.Horizontal };
+            var panel = new StackPanel();
             panel.Children.Add(Ui.Glyph(""));
             panel.Children.Add(_name);
+            if (context.IsVertical)
+            {
+                // Narrow bar: glyph above a small, centred name.
+                Padding = new Thickness(4, 8, 4, 8);
+                _name.FontSize = 11;
+                _name.Margin = new Thickness(0, 4, 0, 0);
+                _name.HorizontalAlignment = HorizontalAlignment.Center;
+            }
+            else
+            {
+                Padding = new Thickness(12, 0, 12, 0);
+                panel.Orientation = Orientation.Horizontal;
+                _name.Margin = new Thickness(8, 0, 0, 0);
+            }
             Content = panel;
             Click += (_, _) => ShellHelper.ShowWindowSwitcher();
             Update(this, EventArgs.Empty);
@@ -106,7 +132,7 @@ internal sealed class ActionCenterWidget : IBarWidget
     public bool PrimaryMonitorOnly => true;
 
     public FrameworkElement Create(BarContext context) =>
-        Ui.GlyphButton("", "Action Center", 44, ShellHelper.ShowActionCenter);
+        Ui.BarGlyphButton(context, "", "Action Center", context.IsVertical ? 40 : 44, ShellHelper.ShowActionCenter);
 }
 
 /// <summary>Thin strip at the far end that toggles the desktop, like Windows'.</summary>
@@ -117,20 +143,20 @@ internal sealed class ShowDesktopWidget : IBarWidget
 
     public FrameworkElement Create(BarContext context)
     {
-        var button = new Button
+        var button = context.Along(new Button
         {
             Style = Ui.ButtonStyle,
-            Width = 8,
-            BorderBrush = Ui.Res("SeparatorBrush"),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Stretch,
             ToolTip = "Show desktop",
-        };
-        button.Content = new Border
+        }, 8);
+        // A thin line separates the strip from the rest of the bar (on its left, or on top when vertical).
+        button.Content = context.Along(new Border
         {
-            Width = 8,
             BorderBrush = Ui.Res("SeparatorBrush"),
-            BorderThickness = new Thickness(1, 0, 0, 0),
+            BorderThickness = context.IsVertical ? new Thickness(0, 1, 0, 0) : new Thickness(1, 0, 0, 0),
             Background = Brushes.Transparent,
-        };
+        }, 8);
         button.Click += (_, _) => ToggleDesktop();
         return button;
     }
@@ -156,5 +182,5 @@ internal sealed class SpacerWidget : IBarWidget
     public string Id => "spacer";
     public string DisplayName => "Spacer";
 
-    public FrameworkElement Create(BarContext context) => new Border { Width = 12, Background = Brushes.Transparent };
+    public FrameworkElement Create(BarContext context) => context.Along(new Border { Background = Brushes.Transparent }, 12);
 }

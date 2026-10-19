@@ -29,7 +29,7 @@ internal sealed class ClockWidget : IBarWidget
         {
             _context = context;
             Style = Ui.ButtonStyle;
-            Padding = new Thickness(10, 0, 10, 0);
+            Padding = context.IsVertical ? new Thickness(2, 8, 2, 8) : new Thickness(10, 0, 10, 0);
             var panel = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             panel.Children.Add(_time);
             if (context.Settings.ShowDate) panel.Children.Add(_date);

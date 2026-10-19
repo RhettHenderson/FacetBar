@@ -18,6 +18,7 @@ It's built on [ManagedShell](https://github.com/cairoshell/ManagedShell) (Apache
 | **Show desktop** | The thin strip at the far right minimizes or restores all windows. |
 
 The bar also:
+- **Position:** goes on any screen edge: bottom, top, left or right. On the left or right, the search box becomes a magnifier button, tray icons wrap into rows, and the side width is set in Settings.
 - **Scaling:** follows each monitor's Windows display scale. At 100% size it's as tall as the Windows 10 taskbar.
 - **Auto-hide:** can slide away and reappear when the mouse touches the screen edge.
 - **Monitors:** runs on every monitor, and by default each bar only lists the windows on its own monitor.
@@ -55,6 +56,8 @@ If the old Linkbar-based version is running, DeskBar asks it to quit when it sta
 | Switch to or minimize a window | Click the app. If it has several windows, click to choose one from the thumbnails. |
 
 Pins are stored in `%APPDATA%\DeskBar\pins.json`.
+
+Store apps such as the new Outlook or Claude live in versioned folders under `C:\Program Files\WindowsApps` that change on every update. DeskBar pins and launches them by their app ID instead of by path. Older pins that point into `WindowsApps` are converted automatically when DeskBar loads them.
 
 ## Search (Everything)
 
@@ -125,7 +128,6 @@ src/DeskBar/
 
 ## Limitations and ideas
 
-- **Edges:** only the top and bottom edges are supported. Left and right would need a vertical layout.
 - **Win+1…9:** these shortcuts still go to the hidden Windows taskbar, because Explorer owns them.
 - **Progress bars and overlay badges on task buttons:** these only appear when Windows routes them to DeskBar. Explorer usually keeps them.
 - **Ideas for later:** jump lists, a volume/media widget, a system monitor, and per-desktop accent colours or wallpapers.

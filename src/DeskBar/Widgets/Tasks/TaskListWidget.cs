@@ -25,10 +25,11 @@ internal sealed class TaskListControl : Border, IDisposable
 {
     private readonly BarContext _context;
     private readonly ICollectionView _windows;
-    private readonly StackPanel _panel = new() { Orientation = Orientation.Horizontal };
+    private readonly StackPanel _panel = new();
     private readonly ScrollViewer _scroll;
     private readonly Dictionary<object, TaskButton> _buttons = [];
     private readonly Dictionary<IntPtr, long> _firstSeen = [];
+    private readonly HashSet<ApplicationWindow> _watched = [];
     private long _sequence;
     private bool _rebuildQueued;
 
@@ -40,31 +41,62 @@ internal sealed class TaskListControl : Border, IDisposable
         Preview = new WindowPreview(context);
         Background = Brushes.Transparent; // so empty space accepts drops and the bar's context menu
         AllowDrop = true;
-        Margin = new Thickness(2, 0, 2, 0);
 
+        bool vertical = context.IsVertical;
+        _panel.Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal;
+        Margin = vertical ? new Thickness(0, 2, 0, 2) : new Thickness(2, 0, 2, 0);
         _scroll = new ScrollViewer
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = vertical ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Hidden,
+            VerticalScrollBarVisibility = vertical ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled,
             Content = _panel,
             Focusable = false,
         };
         _scroll.PreviewMouseWheel += (_, e) =>
         {
-            _scroll.ScrollToHorizontalOffset(_scroll.HorizontalOffset - e.Delta / 2.0);
+            if (vertical) _scroll.ScrollToVerticalOffset(_scroll.VerticalOffset - e.Delta / 2.0);
+            else _scroll.ScrollToHorizontalOffset(_scroll.HorizontalOffset - e.Delta / 2.0);
             e.Handled = true;
         };
         Child = _scroll;
 
-        // Each bar gets its own view of ManagedShell's window list so it can filter by monitor.
-        // Windows on other virtual desktops are "cloaked", which ManagedShell already filters out.
+        // Each bar gets its own view of ManagedShell's window list. ManagedShell turns on WPF "live shaping"
+        // for these views, which has a bug: a delayed RestoreLiveShaping can run after the view is discarded
+        // (when bars are rebuilt) and throw a NullReferenceException. So switch live shaping off and filter
+        // ourselves, re-running whenever a window's ShowInTaskbar or monitor changes.
         _windows = context.Shell.Tasks.CreateGroupedWindowsCollection();
-        _windows.Filter = IncludeWindow;
+        if (_windows is ICollectionViewLiveShaping live)
+        {
+            live.IsLiveFiltering = false;
+            live.IsLiveGrouping = false;
+            live.IsLiveSorting = false;
+        }
+        _windows.GroupDescriptions.Clear();
+        _windows.Filter = null;
         ((INotifyCollectionChanged)_windows).CollectionChanged += OnSourcesChanged;
         context.Pins.Changed += OnSourcesChanged;
         context.Desktops.CurrentChanged += OnSourcesChanged;
 
         Rebuild();
+    }
+
+    private void OnWindowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // Windows on other virtual desktops are "cloaked", which flips ShowInTaskbar when you switch desktops.
+        if (e.PropertyName is nameof(ApplicationWindow.ShowInTaskbar) or nameof(ApplicationWindow.HMonitor))
+            OnSourcesChanged(sender, e);
+    }
+
+    /// <summary>Listens to every window in the list (shown or not), so we notice when one should appear.</summary>
+    private void UpdateWatchedWindows(List<ApplicationWindow> all)
+    {
+        foreach (var w in all.Where(w => _watched.Add(w)))
+            w.PropertyChanged += OnWindowPropertyChanged;
+        foreach (var gone in _watched.Except(all).ToList())
+        {
+            gone.PropertyChanged -= OnWindowPropertyChanged;
+            _watched.Remove(gone);
+        }
     }
 
     private bool IncludeWindow(object item)
@@ -89,7 +121,9 @@ internal sealed class TaskListControl : Border, IDisposable
     private void Rebuild()
     {
         var pins = _context.Pins.GetPins(_context.Desktops.Current.Id);
-        var windows = _windows.Cast<ApplicationWindow>().ToList();
+        var all = _windows.Cast<ApplicationWindow>().ToList();
+        UpdateWatchedWindows(all);
+        var windows = all.Where(IncludeWindow).ToList();
 
         foreach (var w in windows)
             _firstSeen.TryAdd(w.Handle, _sequence++);
@@ -180,8 +214,9 @@ internal sealed class TaskListControl : Border, IDisposable
         int index = 0;
         foreach (var button in _panel.Children.OfType<TaskButton>().Where(b => b.Group.Pin != null))
         {
-            var x = e.GetPosition(button).X;
-            if (x > button.ActualWidth / 2) index++;
+            var p = e.GetPosition(button);
+            bool past = _context.IsVertical ? p.Y > button.ActualHeight / 2 : p.X > button.ActualWidth / 2;
+            if (past) index++;
             else break;
         }
         return index;
@@ -190,6 +225,8 @@ internal sealed class TaskListControl : Border, IDisposable
     public void Dispose()
     {
         Preview.Close();
+        foreach (var w in _watched) w.PropertyChanged -= OnWindowPropertyChanged;
+        _watched.Clear();
         ((INotifyCollectionChanged)_windows).CollectionChanged -= OnSourcesChanged;
         _context.Pins.Changed -= OnSourcesChanged;
         _context.Desktops.CurrentChanged -= OnSourcesChanged;

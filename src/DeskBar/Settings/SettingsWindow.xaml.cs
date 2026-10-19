@@ -127,7 +127,8 @@ public partial class SettingsWindow : Window
 
 public sealed class WidgetRow(string id, string name) : INotifyPropertyChanged
 {
-    public const string Left = "Left side", Right = "Right side", Off = "Off";
+    // On a vertical bar the "left" group is at the top and the "right" group at the bottom.
+    public const string Left = "Left / top", Right = "Right / bottom", Off = "Off";
     public static string[] Placements { get; } = [Left, Right, Off];
 
     public string Id { get; } = id;

@@ -53,8 +53,34 @@ public sealed class BarContext
     public bool IsPrimary => Bar.Screen.Primary;
     public BarEdge Edge => Settings.Edge;
 
+    /// <summary>True when the bar runs down the left or right side of the screen.</summary>
+    public bool IsVertical => Edge is BarEdge.Left or BarEdge.Right;
+
     /// <summary>Popups should open away from the screen edge the bar is on.</summary>
-    public PlacementMode PopupPlacement => Edge == BarEdge.Bottom ? PlacementMode.Top : PlacementMode.Bottom;
+    public PlacementMode PopupPlacement => Edge switch
+    {
+        BarEdge.Top => PlacementMode.Bottom,
+        BarEdge.Left => PlacementMode.Right,
+        BarEdge.Right => PlacementMode.Left,
+        _ => PlacementMode.Top,
+    };
+
+    /// <summary>Sets an element's size along the bar (width on a horizontal bar, height on a vertical one).</summary>
+    public T Along<T>(T element, double length) where T : FrameworkElement
+    {
+        if (IsVertical) element.Height = length;
+        else element.Width = length;
+        return element;
+    }
+
+    /// <summary>Thickness that puts <paramref name="value"/> on the side facing the rest of the screen.</summary>
+    public Thickness InnerEdge(double value) => Edge switch
+    {
+        BarEdge.Top => new Thickness(0, 0, 0, value),
+        BarEdge.Left => new Thickness(0, 0, value, 0),
+        BarEdge.Right => new Thickness(value, 0, 0, 0),
+        _ => new Thickness(0, value, 0, 0),
+    };
 
     /// <summary>Keeps an auto-hiding bar visible while the popup is open.</summary>
     public void TrackPopup(Popup popup)

@@ -47,7 +47,7 @@
                                 <ColumnDefinition />
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
-                                <RowDefinition /><RowDefinition /><RowDefinition />
+                                <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
                             </Grid.RowDefinitions>
                             <TextBlock Text="Position on screen" Style="{StaticResource Label}" />
                             <ComboBox Grid.Column="1" x:Name="EdgeBox" SelectedItem="{Binding Edge}" Width="160" HorizontalAlignment="Left" Margin="0,3" />
@@ -67,9 +67,17 @@
                                 <Slider Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True"
                                         Value="{Binding BackgroundOpacity}" VerticalAlignment="Center" />
                             </DockPanel>
+
+                            <TextBlock Grid.Row="3" Text="Width on left/right side" Style="{StaticResource Label}" />
+                            <DockPanel Grid.Row="3" Grid.Column="1" Margin="0,3">
+                                <TextBlock DockPanel.Dock="Right" Width="48" TextAlignment="Right" VerticalAlignment="Center"
+                                           Text="{Binding VerticalWidth, StringFormat={}{0} px}" />
+                                <Slider Minimum="48" Maximum="300" TickFrequency="4" IsSnapToTickEnabled="True"
+                                        Value="{Binding VerticalWidth}" VerticalAlignment="Center" />
+                            </DockPanel>
                         </Grid>
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="100% matches the Windows 10 taskbar (40 px at 100% display scale)." />
+                                   Text="100% matches the Windows 10 taskbar (40 px at 100% display scale). The side width is measured at 100% and is also multiplied by the bar size. Turn on window titles for a wide side bar with names." />
 
                         <CheckBox x:Name="MatchScaleBox" Content="Scale with each monitor's Windows display scale" IsChecked="{Binding MatchWindowsScale}" />
                         <StackPanel Orientation="Horizontal" Margin="24,2,0,6"

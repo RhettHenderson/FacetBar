@@ -4,7 +4,7 @@ using Microsoft.Win32;
 
 namespace DeskBar.Core;
 
-public enum BarEdge { Bottom, Top }
+public enum BarEdge { Bottom, Top, Left, Right }
 
 public enum SearchMode
 {
@@ -25,6 +25,8 @@ public sealed class BarSettings
     public BarEdge Edge { get; set; } = BarEdge.Bottom;
     /// <summary>Height relative to the Windows 10 taskbar (40px at 100% display scale).</summary>
     public int SizePercent { get; set; } = 100;
+    /// <summary>Width (in pixels at 100% scale, before SizePercent) when the bar is on the left or right edge.</summary>
+    public int VerticalWidth { get; set; } = 76;
     /// <summary>When true the bar follows each monitor's Windows display scale; otherwise FixedScalePercent is used.</summary>
     public bool MatchWindowsScale { get; set; } = true;
     public int FixedScalePercent { get; set; } = 125;

@@ -31,9 +31,15 @@ public sealed class BarWindow : AppBarWindow
 
     internal BarWindow(BarManager manager, ShellManager shell, AppBarScreen screen, BarSettings settings)
         : base(shell.AppBarManager, shell.ExplorerHelper, shell.FullScreenHelper, screen,
-            settings.Edge == BarEdge.Top ? AppBarEdge.Top : AppBarEdge.Bottom,
+            settings.Edge switch
+            {
+                BarEdge.Top => AppBarEdge.Top,
+                BarEdge.Left => AppBarEdge.Left,
+                BarEdge.Right => AppBarEdge.Right,
+                _ => AppBarEdge.Bottom,
+            },
             settings.AutoHide ? AppBarMode.AutoHide : AppBarMode.Normal,
-            BaseHeight)
+            settings.Edge is BarEdge.Left or BarEdge.Right ? settings.VerticalWidth : BaseHeight)
     {
         _manager = manager;
         _shell = shell;
@@ -51,7 +57,7 @@ public sealed class BarWindow : AppBarWindow
         {
             Background = (Brush)FindResource("BarBackground"),
             BorderBrush = (Brush)FindResource("SeparatorBrush"),
-            BorderThickness = settings.Edge == BarEdge.Top ? new Thickness(0, 0, 0, 1) : new Thickness(0, 1, 0, 0),
+            BorderThickness = Context.InnerEdge(1),
             Child = _layout,
             ContextMenu = BuildContextMenu(),
         };
@@ -86,12 +92,20 @@ public sealed class BarWindow : AppBarWindow
     {
         double scale = ContentScale;
         _layout.LayoutTransform = new ScaleTransform(scale, scale);
-        double height = Math.Round(BaseHeight * scale);
-        if (Math.Abs(height - DesiredHeight) > 0.1)
+        bool changed;
+        if (Context.IsVertical)
         {
-            DesiredHeight = height;
-            if (Handle != IntPtr.Zero && !IsOpening) UpdatePosition(); // while opening, the base class positions us
+            double width = Math.Round(Math.Clamp(BarSettings.Current.VerticalWidth, 40, 400) * scale);
+            changed = Math.Abs(width - DesiredWidth) > 0.1;
+            DesiredWidth = width;
         }
+        else
+        {
+            double height = Math.Round(BaseHeight * scale);
+            changed = Math.Abs(height - DesiredHeight) > 0.1;
+            DesiredHeight = height;
+        }
+        if (changed && Handle != IntPtr.Zero && !IsOpening) UpdatePosition(); // while opening, the base class positions us
     }
 
     private void OnBarPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -110,17 +124,27 @@ public sealed class BarWindow : AppBarWindow
         var left = Resolve(settings.LeftWidgets);
         var right = Resolve(settings.RightWidgets);
 
-        // Columns: left widgets (auto), one star column (a stretching widget or empty space), right widgets (auto).
+        // Slots: start-group widgets (auto), one star slot (a stretching widget or empty space), end-group widgets (auto).
+        // Horizontal bars lay slots out as columns (left → right), vertical bars as rows (top → bottom).
         var stretch = left.Concat(right).FirstOrDefault(w => w.Stretch);
-        int column = 0;
+        bool vertical = Context.IsVertical;
+        int slot = 0;
+
+        void AddSlot(bool star)
+        {
+            var size = star ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            if (vertical) _layout.RowDefinitions.Add(new RowDefinition { Height = size });
+            else _layout.ColumnDefinitions.Add(new ColumnDefinition { Width = size });
+        }
 
         void Add(IBarWidget widget, bool star)
         {
-            _layout.ColumnDefinitions.Add(new ColumnDefinition { Width = star ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
+            AddSlot(star);
             try
             {
                 var element = widget.Create(Context);
-                Grid.SetColumn(element, column);
+                if (vertical) Grid.SetRow(element, slot);
+                else Grid.SetColumn(element, slot);
                 _layout.Children.Add(element);
                 _widgetElements.Add(element);
             }
@@ -128,14 +152,14 @@ public sealed class BarWindow : AppBarWindow
             {
                 Log.Error($"Creating widget '{widget.Id}'", ex);
             }
-            column++;
+            slot++;
         }
 
         foreach (var w in left) Add(w, w == stretch);
         if (stretch == null)
         {
-            _layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            column++;
+            AddSlot(star: true);
+            slot++;
         }
         foreach (var w in right) Add(w, w == stretch);
     }
