@@ -42,7 +42,8 @@ internal static class SelfTest
                 if (!p.IsPackaged) return $"{p.Name} -> {p.TargetExe ?? p.Path}";
                 // Store apps must resolve to an app id or they can't be launched or matched to their windows.
                 if (p.EffectiveAppId == null) throw new InvalidOperationException($"no app id found for Store app pin '{p.Name}'");
-                return $"{p.Name} -> Store app {p.EffectiveAppId}";
+                if (PackagedApps.IconFor(p.EffectiveAppId) == null) throw new InvalidOperationException($"no icon for Store app pin '{p.Name}'");
+                return $"{p.Name} -> Store app {p.EffectiveAppId} (icon OK)";
             }
             var lines = desktops.Select(d =>
             {

@@ -1,4 +1,6 @@
 using System.Runtime.CompilerServices;
+using System.Windows.Media;
+using ManagedShell.Common.Enums;
 using ManagedShell.Common.Helpers;
 using ManagedShell.UWPInterop;
 using ManagedShell.WindowsTasks;
@@ -32,6 +34,29 @@ internal static class PackagedApps
         return parts.Length >= 3 ? $"{parts[0]}_{parts[^1]}" : null;
     }
 
+    private static void EnsureAppList()
+    {
+        if (_fetched) return;
+        StoreAppHelper.AppList.FetchApps();
+        _fetched = true;
+    }
+
+    /// <summary>The app's logo from its package, loaded synchronously. Null if it can't be found.</summary>
+    public static ImageSource? IconFor(string appId)
+    {
+        try
+        {
+            EnsureAppList();
+            var app = StoreAppHelper.AppList.GetAppByAumid(appId) ?? new StoreApp(appId);
+            return app.GetIconImageSource(IconSize.Large);
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"No icon for Store app {appId}: {ex.Message}");
+            return null;
+        }
+    }
+
     /// <summary>App id of the installed package that the given (possibly outdated) path belongs to.</summary>
     public static string? AppIdForPath(string path)
     {
@@ -39,11 +64,7 @@ internal static class PackagedApps
         if (family == null) return null;
         try
         {
-            if (!_fetched)
-            {
-                StoreAppHelper.AppList.FetchApps();
-                _fetched = true;
-            }
+            EnsureAppList();
             return StoreAppHelper.AppList
                 .Select(a => a.AppUserModelId)
                 .FirstOrDefault(id => id.StartsWith(family + "!", StringComparison.OrdinalIgnoreCase));

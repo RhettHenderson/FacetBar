@@ -20,8 +20,8 @@ It's built on [ManagedShell](https://github.com/cairoshell/ManagedShell) (Apache
 The bar also:
 - **Position:** goes on any screen edge: bottom, top, left or right. On the left or right, the search box becomes a magnifier button, tray icons wrap into rows, and the side width is set in Settings.
 - **Scaling:** follows each monitor's Windows display scale. At 100% size it's as tall as the Windows 10 taskbar.
-- **Auto-hide:** can slide away and reappear when the mouse touches the screen edge.
-- **Monitors:** runs on every monitor, and by default each bar only lists the windows on its own monitor.
+- **Auto-hide:** can slide away and reappear when the mouse comes within a set distance of the edge (12 px by default, adjustable in Settings). It also reappears over maximized windows, but stays out of the way of real full-screen content like videos and games.
+- **Monitors:** runs on every monitor, and every bar shows all your apps. Settings can limit each bar to the windows on its own monitor.
 - **Windows taskbar:** hides the Windows taskbar while it runs, and restores it when it exits, even after a crash.
 
 ## Running

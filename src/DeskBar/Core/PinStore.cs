@@ -67,9 +67,11 @@ public sealed class PinnedApp
     {
         try
         {
+            // Store apps: use the package's own logo. (ShellItem icons load asynchronously and come back
+            // null on first access, which left closed Store-app pins as blank buttons.)
             if (IsPackaged && EffectiveAppId is { } appId)
-                return new ShellItem($@"shell:AppsFolder\{appId}").LargeIcon;
-            return IconImageConverter.GetImageFromAssociatedIcon(Path, IconSize.Large);
+                return PackagedApps.IconFor(appId) ?? IconImageConverter.GetDefaultIcon();
+            return IconImageConverter.GetImageFromAssociatedIcon(Path, IconSize.Large) ?? IconImageConverter.GetDefaultIcon();
         }
         catch (Exception ex)
         {

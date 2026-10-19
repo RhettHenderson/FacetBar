@@ -93,7 +93,16 @@
 
                 <GroupBox Header="Behavior">
                     <StackPanel>
-                        <CheckBox Content="Automatically hide the bar (show it when the mouse touches the screen edge)" IsChecked="{Binding AutoHide}" />
+                        <CheckBox x:Name="AutoHideBox" Content="Automatically hide the bar (show it when the mouse nears the screen edge)" IsChecked="{Binding AutoHide}" />
+                        <DockPanel Margin="24,2,0,6" IsEnabled="{Binding IsChecked, ElementName=AutoHideBox}">
+                            <TextBlock Text="Show it when the mouse is within" Style="{StaticResource Label}" />
+                            <TextBlock DockPanel.Dock="Right" Width="48" TextAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding AutoHideRevealDistance, StringFormat={}{0} px}" />
+                            <Slider Minimum="1" Maximum="60" TickFrequency="1" IsSnapToTickEnabled="True"
+                                    Value="{Binding AutoHideRevealDistance}" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="24,0,0,6"
+                                   Text="An auto-hidden bar also shows over maximized windows. It stays hidden behind real full-screen content like videos and games." />
                         <CheckBox Content="Hide the Windows taskbar while DeskBar is running" IsChecked="{Binding HideWindowsTaskbar}" />
                         <CheckBox x:Name="AllMonitorsBox" Content="Show a bar on every monitor" IsChecked="{Binding ShowOnAllMonitors}" />
                         <CheckBox Content="Each monitor's bar only shows windows that are on that monitor" Margin="24,4,0,4"

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using DeskBar.Core;
 using DeskBar.Widgets;
 using ManagedShell;
@@ -25,7 +26,11 @@ public sealed class BarWindow : AppBarWindow
     private readonly Grid _layout;
     private readonly List<FrameworkElement> _widgetElements = [];
     private readonly uint _taskbarCreatedMessage = Native.RegisterWindowMessage("TaskbarCreated");
+    private readonly DispatcherTimer _edgeTimer = new() { Interval = TimeSpan.FromMilliseconds(40) };
+    private readonly DispatcherTimer _fullScreenTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private int _openPopups;
+    private bool _mouseNearEdge;
+    private bool _applyingFullScreen;
 
     public BarContext Context { get; }
 
@@ -194,7 +199,70 @@ public sealed class BarWindow : AppBarWindow
     }
 
     protected override bool ShouldAllowAutoHide() =>
-        _openPopups == 0 && !IsKeyboardFocusWithin && base.ShouldAllowAutoHide();
+        _openPopups == 0 && !IsKeyboardFocusWithin && !_mouseNearEdge && base.ShouldAllowAutoHide();
+
+    /// <summary>
+    /// Reveals an auto-hidden bar when the mouse comes within AutoHideRevealDistance of its edge, rather than
+    /// only when it touches the 2px sliver that's left on screen.
+    /// </summary>
+    private void CheckMouseNearEdge()
+    {
+        if (!Native.GetCursorPos(out var pt)) return;
+        var b = Screen.Bounds; // physical pixels, same space as the cursor
+        double reach = Math.Max(1, BarSettings.Current.AutoHideRevealDistance) * DpiScale;
+
+        // Don't pop up over real full-screen content (we've conceded the top spot to it).
+        bool near = Topmost && (Context.Edge switch
+        {
+            BarEdge.Top => pt.Y < b.Top + reach,
+            BarEdge.Left => pt.X < b.Left + reach,
+            BarEdge.Right => pt.X >= b.Right - reach,
+            _ => pt.Y >= b.Bottom - reach,
+        }) && (Context.IsVertical
+            ? pt.Y >= b.Top && pt.Y < b.Bottom && pt.X >= b.Left - reach && pt.X < b.Right + reach
+            : pt.X >= b.Left && pt.X < b.Right && pt.Y >= b.Top - reach && pt.Y < b.Bottom + reach);
+
+        if (near == _mouseNearEdge) return;
+        bool before = AllowAutoHide;
+        _mouseNearEdge = near;
+        if (AllowAutoHide != before) OnPropertyChanged(nameof(AllowAutoHide));
+    }
+
+    // ---------------------------------------------------------------- full-screen apps
+
+    // ManagedShell counts any window covering the whole monitor as full screen, including a maximized window
+    // when an auto-hidden bar reserves no space. We only step aside for real full-screen content (videos,
+    // games): those windows aren't maximized, whereas apps like a maximized Claude window are.
+
+    protected override void OnFullScreenEnter(FullScreenApp app)
+    {
+        if (_applyingFullScreen) base.OnFullScreenEnter(app);
+    }
+
+    protected override void OnFullScreenLeave()
+    {
+        if (_applyingFullScreen) base.OnFullScreenLeave();
+    }
+
+    private void UpdateFullScreenState()
+    {
+        if (IsClosing) return;
+        var app = _fullScreenHelper.FullScreenApps.FirstOrDefault(a =>
+            (a.screen.DeviceName == Screen.DeviceName || a.screen.IsVirtualScreen) && !Native.IsZoomed(a.hWnd));
+        _applyingFullScreen = true;
+        try
+        {
+            if (app != null && Topmost) OnFullScreenEnter(app);
+            else if (app == null && !Topmost) OnFullScreenLeave();
+        }
+        finally
+        {
+            _applyingFullScreen = false;
+        }
+    }
+
+    private void OnFullScreenAppsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) =>
+        UpdateFullScreenState();
 
     protected override void OnIsKeyboardFocusWithinChanged(DependencyPropertyChangedEventArgs e)
     {
@@ -214,6 +282,18 @@ public sealed class BarWindow : AppBarWindow
         SetBlur(BarSettings.Current.UseBlur);
         WindowHelper.ExcludeWindowFromPeek(Handle);
         if (Screen.Primary) SetTrayHost();
+
+        _fullScreenHelper.FullScreenApps.CollectionChanged += OnFullScreenAppsChanged;
+        // A window can go from maximized to full screen (or back) without the list changing, so re-check now and then.
+        _fullScreenTimer.Tick += (_, _) => UpdateFullScreenState();
+        _fullScreenTimer.Start();
+        UpdateFullScreenState();
+
+        if (AppBarMode == AppBarMode.AutoHide)
+        {
+            _edgeTimer.Tick += (_, _) => CheckMouseNearEdge();
+            _edgeTimer.Start();
+        }
     }
 
     protected override IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -254,6 +334,9 @@ public sealed class BarWindow : AppBarWindow
     {
         if (!AllowClose) return;
         PropertyChanged -= OnBarPropertyChanged;
+        _edgeTimer.Stop();
+        _fullScreenTimer.Stop();
+        _fullScreenHelper.FullScreenApps.CollectionChanged -= OnFullScreenAppsChanged;
         foreach (var element in _widgetElements.OfType<IDisposable>())
         {
             try { element.Dispose(); }

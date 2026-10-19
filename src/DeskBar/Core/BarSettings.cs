@@ -37,9 +37,11 @@ public sealed class BarSettings
 
     // Behaviour
     public bool AutoHide { get; set; }
+    /// <summary>An auto-hidden bar reappears when the mouse comes within this many pixels (at 100% scale) of its edge.</summary>
+    public int AutoHideRevealDistance { get; set; } = 12;
     public bool ShowOnAllMonitors { get; set; } = true;
-    /// <summary>Each monitor's bar only lists windows that are on that monitor (Windows' default).</summary>
-    public bool TasksOnOwnMonitorOnly { get; set; } = true;
+    /// <summary>When true, each monitor's bar only lists windows on that monitor; by default every bar shows every app.</summary>
+    public bool TasksOnOwnMonitorOnly { get; set; }
     public bool HideWindowsTaskbar { get; set; } = true;
 
     // Clock
