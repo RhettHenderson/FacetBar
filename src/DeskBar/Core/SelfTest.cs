@@ -65,6 +65,26 @@ internal static class SelfTest
 
         Check("Widgets", () => string.Join(", ", WidgetRegistry.All.Select(w => w.Id)));
 
+        Check("Renamed exe matching", () =>
+        {
+            // A running app whose exe was renamed (app.exe -> app.prev.exe) must still match its pin.
+            var dir = Directory.CreateTempSubdirectory("deskbar-selftest").FullName;
+            try
+            {
+                var renamed = Path.Combine(dir, "notepad.prev.exe");
+                File.Copy(Path.Combine(Environment.SystemDirectory, "notepad.exe"), renamed);
+                if (!Widgets.Tasks.TaskGroup.IsRenamedCopy(Path.Combine(dir, "notepad.exe"), renamed))
+                    throw new InvalidOperationException("notepad.prev.exe wasn't matched to a notepad.exe pin");
+                if (Widgets.Tasks.TaskGroup.IsRenamedCopy(Path.Combine(dir, "calc.exe"), renamed))
+                    throw new InvalidOperationException("notepad.prev.exe was wrongly matched to a calc.exe pin");
+                return "notepad.prev.exe matches a notepad.exe pin, not a calc.exe pin";
+            }
+            finally
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+        });
+
         try
         {
             if (!EverythingClient.IsRunning)

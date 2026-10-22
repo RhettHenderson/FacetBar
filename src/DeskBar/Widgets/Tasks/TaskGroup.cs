@@ -56,7 +56,30 @@ public sealed class TaskGroup
         var windowId = WindowAppId(w);
         if (pinId != null && windowId != null)
             return string.Equals(pinId, windowId, StringComparison.OrdinalIgnoreCase);
-        return pin.TargetExe != null && pin.TargetExe == WindowExe(w);
+        if (pin.TargetExe == null || WindowExe(w) is not { } exe) return false;
+        return pin.TargetExe == exe || IsRenamedCopy(pin.TargetExe, exe);
+    }
+
+    private static readonly Dictionary<string, string?> OriginalNames = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when a running exe is the pinned exe under another name. Build tools and self-updaters often
+    /// rename a running exe (e.g. Zing.exe → Zing.prev.exe) to write a new one in its place, and Windows
+    /// then reports the renamed path for the old process. The file's version info still records its
+    /// original name. This is only a fallback, because some apps (e.g. Electron ones) record "electron.exe" there.
+    /// </summary>
+    internal static bool IsRenamedCopy(string pinExe, string windowExe)
+    {
+        if (!string.Equals(Path.GetDirectoryName(pinExe), Path.GetDirectoryName(windowExe), StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!OriginalNames.TryGetValue(windowExe, out var original))
+        {
+            try { original = System.Diagnostics.FileVersionInfo.GetVersionInfo(windowExe).OriginalFilename; }
+            catch (Exception ex) when (ex is FileNotFoundException or IOException or UnauthorizedAccessException) { original = null; }
+            OriginalNames[windowExe] = original;
+        }
+        return !string.IsNullOrWhiteSpace(original)
+               && string.Equals(original.Trim(), Path.GetFileName(pinExe), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Builds a pin for a running app (used by "Pin to ..." on an unpinned button).</summary>
