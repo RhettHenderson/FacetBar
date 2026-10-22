@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -28,8 +29,12 @@ public sealed class BarWindow : AppBarWindow
     private readonly uint _taskbarCreatedMessage = Native.RegisterWindowMessage("TaskbarCreated");
     private readonly DispatcherTimer _edgeTimer = new() { Interval = TimeSpan.FromMilliseconds(40) };
     private readonly DispatcherTimer _fullScreenTimer = new() { Interval = TimeSpan.FromSeconds(1) };
-    private int _openPopups;
+    private readonly List<Popup> _popups = [];
+    private readonly HashSet<ContextMenu> _menus = [];
     private bool _mouseNearEdge;
+    private bool _mouseOverBar;
+    private bool _hidden;
+    private bool? _lastAllowAutoHide;
     private bool _applyingFullScreen;
 
     public BarContext Context { get; }
@@ -184,30 +189,69 @@ public sealed class BarWindow : AppBarWindow
 
     // ---------------------------------------------------------------- auto-hide
 
-    public void AddOpenPopup()
+    // Whether an auto-hidden bar may slide away is decided from live state, re-checked every 40ms, rather than
+    // from ManagedShell's event-driven flags (mouse enter/leave, context menu opening/closing). Those can miss
+    // an event, e.g. a MouseLeave during a drag or a right-click menu that isn't the bar's own, and then the
+    // bar stays visible indefinitely.
+
+    /// <summary>Keeps the bar visible while the popup is open.</summary>
+    public void RegisterPopup(Popup popup)
     {
-        bool before = AllowAutoHide;
-        _openPopups++;
-        if (AllowAutoHide != before) OnPropertyChanged(nameof(AllowAutoHide));
+        _popups.Add(popup);
+        popup.Opened += (_, _) => ReevaluateAutoHide();
+        popup.Closed += (_, _) => ReevaluateAutoHide();
     }
 
-    public void RemoveOpenPopup()
+    /// <summary>Keeps the bar visible while a context menu opened from code is showing.</summary>
+    public void RegisterMenu(ContextMenu menu)
     {
-        bool before = AllowAutoHide;
-        _openPopups = Math.Max(0, _openPopups - 1);
-        if (AllowAutoHide != before) OnPropertyChanged(nameof(AllowAutoHide));
+        _menus.Add(menu);
+        menu.Opened += (_, _) => ReevaluateAutoHide();
+        menu.Closed += (_, _) =>
+        {
+            _menus.Remove(menu);
+            ReevaluateAutoHide();
+        };
     }
+
+    private bool AnyPopupOpen =>
+        _popups.Any(p => p.IsOpen) || _menus.Any(m => m.IsOpen) || _root.ContextMenu?.IsOpen == true;
+
+    /// <summary>Only typing (the search box) holds the bar open; a clicked button keeping focus doesn't.</summary>
+    private bool IsTyping => IsKeyboardFocusWithin && Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase;
 
     protected override bool ShouldAllowAutoHide() =>
-        _openPopups == 0 && !IsKeyboardFocusWithin && !_mouseNearEdge && base.ShouldAllowAutoHide();
+        AppBarMode == AppBarMode.AutoHide && !_mouseOverBar && !_mouseNearEdge && !AnyPopupOpen && !IsTyping;
+
+    private void ReevaluateAutoHide()
+    {
+        if (AppBarMode != AppBarMode.AutoHide || IsOpening || IsClosing) return;
+        bool allow = AllowAutoHide;
+        if (allow == _lastAllowAutoHide) return;
+        _lastAllowAutoHide = allow;
+        OnPropertyChanged(nameof(AllowAutoHide)); // the base class animates in or out
+    }
+
+    protected override void OnAutoHideAnimationBegin(bool isHiding)
+    {
+        base.OnAutoHideAnimationBegin(isHiding);
+        _hidden = isHiding;
+    }
 
     /// <summary>
-    /// Reveals an auto-hidden bar when the mouse comes within AutoHideRevealDistance of its edge, rather than
-    /// only when it touches the 2px sliver that's left on screen.
+    /// Polled: is the mouse over the visible bar, or close to the screen edge it's hidden against? Reveals an
+    /// auto-hidden bar when the mouse comes within AutoHideRevealDistance of the edge, rather than only when
+    /// it touches the 2px sliver that's left on screen.
     /// </summary>
-    private void CheckMouseNearEdge()
+    private void AutoHideTick()
     {
         if (!Native.GetCursorPos(out var pt)) return;
+
+        // The window keeps its full size while hidden (only its content slides away), so only count the
+        // mouse as "over the bar" while the bar is actually showing.
+        _mouseOverBar = !_hidden && Native.GetWindowRect(Handle, out var r)
+                        && pt.X >= r.Left && pt.X < r.Right && pt.Y >= r.Top && pt.Y < r.Bottom;
+
         var b = Screen.Bounds; // physical pixels, same space as the cursor
         double reach = Math.Max(1, BarSettings.Current.AutoHideRevealDistance) * DpiScale;
 
@@ -222,10 +266,8 @@ public sealed class BarWindow : AppBarWindow
             ? pt.Y >= b.Top && pt.Y < b.Bottom && pt.X >= b.Left - reach && pt.X < b.Right + reach
             : pt.X >= b.Left && pt.X < b.Right && pt.Y >= b.Top - reach && pt.Y < b.Bottom + reach);
 
-        if (near == _mouseNearEdge) return;
-        bool before = AllowAutoHide;
         _mouseNearEdge = near;
-        if (AllowAutoHide != before) OnPropertyChanged(nameof(AllowAutoHide));
+        ReevaluateAutoHide();
     }
 
     // ---------------------------------------------------------------- full-screen apps
@@ -267,7 +309,7 @@ public sealed class BarWindow : AppBarWindow
     protected override void OnIsKeyboardFocusWithinChanged(DependencyPropertyChangedEventArgs e)
     {
         base.OnIsKeyboardFocusWithinChanged(e);
-        OnPropertyChanged(nameof(AllowAutoHide));
+        ReevaluateAutoHide();
     }
 
     /// <summary>Briefly reveals an auto-hidden bar (e.g. after switching desktops).</summary>
@@ -291,7 +333,7 @@ public sealed class BarWindow : AppBarWindow
 
         if (AppBarMode == AppBarMode.AutoHide)
         {
-            _edgeTimer.Tick += (_, _) => CheckMouseNearEdge();
+            _edgeTimer.Tick += (_, _) => AutoHideTick();
             _edgeTimer.Start();
         }
     }

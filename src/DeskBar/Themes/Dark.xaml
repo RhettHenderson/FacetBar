@@ -11,7 +11,9 @@
     <SolidColorBrush x:Key="SubtleForegroundBrush" Color="#B3FFFFFF" />
     <SolidColorBrush x:Key="HoverBrush" Color="#26FFFFFF" />
     <SolidColorBrush x:Key="PressedBrush" Color="#14FFFFFF" />
-    <SolidColorBrush x:Key="ActiveTaskBrush" Color="#33FFFFFF" />
+    <!-- Replaced at runtime with tints of the Windows accent colour (Core.Theme). -->
+    <SolidColorBrush x:Key="RunningTaskBrush" Color="#380078D7" />
+    <SolidColorBrush x:Key="ActiveTaskBrush" Color="#700078D7" />
     <SolidColorBrush x:Key="FlashBrush" Color="#CCE08A1E" />
     <SolidColorBrush x:Key="PopupBackground" Color="#F2242424" />
     <SolidColorBrush x:Key="PopupBorderBrush" Color="#40FFFFFF" />

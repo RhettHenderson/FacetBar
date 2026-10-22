@@ -16,6 +16,9 @@ internal sealed class TaskButton : Border
 {
     public const string PinDragFormat = "DeskBarPinnedApp";
 
+    /// <summary>Thickness of the accent line under (or beside) running apps.</summary>
+    private const double IndicatorThickness = 3;
+
     private readonly TaskListControl _owner;
     private readonly BarContext _context;
     private readonly Image _icon = new() { Width = 24, Height = 24 };
@@ -70,12 +73,12 @@ internal sealed class TaskButton : Border
         switch (context.Edge)
         {
             case BarEdge.Left or BarEdge.Right:
-                _indicator.Width = 2;
+                _indicator.Width = IndicatorThickness;
                 _indicator.HorizontalAlignment = context.Edge == BarEdge.Left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
                 _indicator.VerticalAlignment = VerticalAlignment.Center;
                 break;
             default:
-                _indicator.Height = 2;
+                _indicator.Height = IndicatorThickness;
                 _indicator.VerticalAlignment = context.Edge == BarEdge.Top ? VerticalAlignment.Top : VerticalAlignment.Bottom;
                 _indicator.HorizontalAlignment = HorizontalAlignment.Center;
                 break;
@@ -151,16 +154,19 @@ internal sealed class TaskButton : Border
         _title.Text = g.Windows.Count == 1 ? first!.Title : g.Name;
         ToolTip = g.Windows.Count > 1 ? null : g.Tooltip; // multi-window groups show the preview instead
 
+        // Pinned-only apps stay transparent; running apps get an accent tint (stronger when focused or
+        // hovered) so they stand out at a glance, plus a thick accent line on the screen-edge side.
         bool active = g.IsActive;
         if (g.IsFlashing && !active) Background = Ui.Res("FlashBrush");
-        else if (active) Background = _hovered ? Ui.Res("HoverBrush") : Ui.Res("ActiveTaskBrush");
+        else if (active || (g.IsRunning && _hovered)) Background = Ui.Res("ActiveTaskBrush");
+        else if (g.IsRunning) Background = Ui.Res("RunningTaskBrush");
         else Background = _hovered ? Ui.Res("HoverBrush") : Brushes.Transparent;
 
         _indicator.Visibility = g.IsRunning ? Visibility.Visible : Visibility.Collapsed;
         _indicator.Background = Ui.Res("AccentBrush");
-        // Full length when active/hovered, slightly shorter when just running.
+        // Full length when active/hovered, nearly full when just running.
         double length = _context.IsVertical ? Height : Width;
-        double indicatorLength = active || _hovered ? length : length - 12;
+        double indicatorLength = active || _hovered ? length : length - 8;
         if (_context.IsVertical) _indicator.Height = indicatorLength;
         else _indicator.Width = indicatorLength;
         _indicator.Opacity = g.Windows.Count > 1 && !active ? 0.85 : 1;

@@ -85,15 +85,13 @@ public sealed class BarContext
     /// <summary>Keeps an auto-hiding bar visible while the popup is open.</summary>
     public void TrackPopup(Popup popup)
     {
-        popup.Opened += (_, _) => Bar.AddOpenPopup();
-        popup.Closed += (_, _) => Bar.RemoveOpenPopup();
+        Bar.RegisterPopup(popup);
     }
 
     /// <summary>Same as <see cref="TrackPopup"/> for context menus opened from code.</summary>
     public void TrackMenu(System.Windows.Controls.ContextMenu menu)
     {
-        menu.Opened += (_, _) => Bar.AddOpenPopup();
-        menu.Closed += (_, _) => Bar.RemoveOpenPopup();
+        Bar.RegisterMenu(menu);
     }
 }
 

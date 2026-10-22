@@ -46,6 +46,9 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern bool GetCursorPos(out POINT point);
 
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
     /// <summary>True if the window is maximized.</summary>
     [DllImport("user32.dll")]
     public static extern bool IsZoomed(IntPtr hWnd);

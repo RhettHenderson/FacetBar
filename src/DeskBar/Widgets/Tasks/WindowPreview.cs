@@ -45,7 +45,7 @@ internal sealed class WindowPreview
         };
         context.TrackPopup(_popup);
         _root.MouseEnter += (_, _) => _closeTimer.Stop();
-        _root.MouseLeave += (_, _) => { if (!_openedByClick) _closeTimer.Start(); };
+        _root.MouseLeave += (_, _) => StartCloseTimer();
         _closeTimer.Tick += (_, _) => Close();
         _peekTimer.Tick += (_, _) =>
         {
@@ -111,7 +111,19 @@ internal sealed class WindowPreview
 
     public void MouseLeftButton(TaskButton button)
     {
-        if (_button == button && !_openedByClick) _closeTimer.Start();
+        if (_button == button) StartCloseTimer();
+    }
+
+    /// <summary>
+    /// The flyout closes shortly after the mouse leaves both it and its button, whether it was opened by
+    /// hovering or by clicking (a click-opened one gets a little longer). Otherwise a click-opened flyout
+    /// stayed up indefinitely and held an auto-hidden bar on screen.
+    /// </summary>
+    private void StartCloseTimer()
+    {
+        _closeTimer.Stop();
+        _closeTimer.Interval = TimeSpan.FromMilliseconds(_openedByClick ? 700 : 350);
+        _closeTimer.Start();
     }
 
     // ------------------------------------------------------------------ content

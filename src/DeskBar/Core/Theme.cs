@@ -14,6 +14,9 @@ internal static class Theme
         resources["AccentColor"] = accent;
         resources["AccentBrush"] = Freeze(new SolidColorBrush(accent));
         resources["AccentSoftBrush"] = Freeze(new SolidColorBrush(Color.FromArgb(0x60, accent.R, accent.G, accent.B)));
+        // Task buttons: a light accent tint marks running apps, a stronger one the focused/hovered app.
+        resources["RunningTaskBrush"] = Freeze(new SolidColorBrush(Color.FromArgb(0x38, accent.R, accent.G, accent.B)));
+        resources["ActiveTaskBrush"] = Freeze(new SolidColorBrush(Color.FromArgb(0x70, accent.R, accent.G, accent.B)));
 
         byte alpha = (byte)Math.Round(Math.Clamp(settings.BackgroundOpacity, 0, 100) * 2.55);
         resources["BarBackground"] = Freeze(new SolidColorBrush(Color.FromArgb(alpha, 0x16, 0x16, 0x16)));
