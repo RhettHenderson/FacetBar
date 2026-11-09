@@ -78,9 +78,13 @@ internal static class SelfTest
 
         Check("Start menu detection", () =>
         {
+            // Same "is Start open?" query the bars poll (no COM events; see StartMenuMonitor).
+            using var visibility = new ManagedShell.Common.Helpers.AppVisibilityHelper(false);
+            bool open = visibility.IsLauncherVisible();
             var start = StartMenuMonitor.FindStartWindow();
             // The self-test runs from a command line, so Start should be closed (its window cloaked).
-            return start == IntPtr.Zero ? "Start window correctly not found while closed" : $"found window {start:X} (Start open?)";
+            return $"launcher visible = {open}; " +
+                   (start == IntPtr.Zero ? "Start window correctly not found while closed" : $"found window {start:X} (Start open?)");
         });
 
         Check("Renamed exe matching", () =>

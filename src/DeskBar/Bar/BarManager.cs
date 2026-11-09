@@ -36,7 +36,7 @@ internal sealed class BarManager : IDisposable
             foreach (var bar in _bars) bar.Peek(); // show auto-hidden bars briefly so the new desktop's pins are visible
         };
 
-        _startMenu = new StartMenuMonitor(Dispatcher.CurrentDispatcher);
+        _startMenu = new StartMenuMonitor();
         _startMenu.Changed += OnStartMenuChanged;
         // Start animates in, and may settle its position after it first appears, so check twice.
         _startNudge = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };

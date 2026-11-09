@@ -14,20 +14,19 @@ namespace DeskBar.Core;
 /// </summary>
 internal sealed class StartMenuMonitor : IDisposable
 {
-    private readonly AppVisibilityHelper _visibility = new(true); // must stay referenced for its events
-    private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromMilliseconds(250) };
-    private readonly Dispatcher _dispatcher;
+    // Polled, not event-driven: ManagedShell's IAppVisibilityEvents declares its callbacks as returning
+    // `long` without [PreserveSig], so .NET expects an extra out-pointer Windows never passes and crashes the
+    // whole process (access violation in coreclr) the first time the Start menu opens. RetroBar polls too.
+    private readonly AppVisibilityHelper _visibility = new(false);
+    private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromMilliseconds(100) };
 
     public bool IsOpen { get; private set; }
 
     /// <summary>Raised on the UI thread when the Start menu opens or closes.</summary>
     public event EventHandler? Changed;
 
-    public StartMenuMonitor(Dispatcher dispatcher)
+    public StartMenuMonitor()
     {
-        _dispatcher = dispatcher;
-        _visibility.LauncherVisibilityChanged += (_, e) => _dispatcher.BeginInvoke(() => Set(e.Visible));
-        // Backstop in case the COM event isn't delivered.
         _poll.Tick += (_, _) => Set(SafeIsLauncherVisible());
         _poll.Start();
     }
