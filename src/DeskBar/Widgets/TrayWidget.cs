@@ -37,6 +37,7 @@ internal sealed class TrayControl : StackPanel, IDisposable
     private readonly WrapPanel _pinned = new() { Orientation = Orientation.Horizontal, Background = Brushes.Transparent, AllowDrop = true, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly WrapPanel _overflowIcons = new() { Width = 5 * 40, Background = Brushes.Transparent, AllowDrop = true, MinHeight = 40 };
     private readonly Popup _overflow;
+    private readonly Border _overflowBorder;
     private readonly Button _chevron;
     private readonly BalloonPopup _balloon;
 
@@ -56,9 +57,19 @@ internal sealed class TrayControl : StackPanel, IDisposable
         };
         _chevron = Ui.BarGlyphButton(context, chevronGlyph, "Show hidden icons", context.IsVertical ? 28 : 24,
             () => _overflow!.IsOpen = !_overflow.IsOpen, glyphSize: 12);
+        // Dragging an icon onto the ^ button opens the flyout (and dropping on the button hides the icon).
         _chevron.AllowDrop = true;
         _chevron.DragEnter += (_, e) => { if (e.Data.GetDataPresent(IconDragFormat)) _overflow!.IsOpen = true; };
+        _chevron.DragOver += (_, e) => DragOverTarget(e, null);
+        _chevron.Drop += (_, e) => DropOn(e, pin: false);
 
+        _overflowBorder = new Border
+        {
+            Style = (Style)Application.Current.FindResource("PopupBorder"),
+            Padding = new Thickness(4),
+            Child = _overflowIcons,
+            AllowDrop = true,
+        };
         _overflow = new Popup
         {
             PlacementTarget = _chevron,
@@ -66,22 +77,22 @@ internal sealed class TrayControl : StackPanel, IDisposable
             StaysOpen = false,
             AllowsTransparency = true,
             PopupAnimation = PopupAnimation.Fade,
-            Child = new Border
-            {
-                Style = (Style)Application.Current.FindResource("PopupBorder"),
-                Padding = new Thickness(4),
-                Child = _overflowIcons,
-            },
+            Child = _overflowBorder,
         };
         context.TrackPopup(_overflow);
 
         Children.Add(_chevron);
         Children.Add(_pinned);
 
-        _pinned.DragOver += (_, e) => DragOverTarget(e);
-        _pinned.Drop += (_, e) => DropOn(e, pin: true);
-        _overflowIcons.DragOver += (_, e) => DragOverTarget(e);
-        _overflowIcons.Drop += (_, e) => DropOn(e, pin: false);
+        // Drop targets: the whole tray area pins an icon to the bar; the whole flyout hides it.
+        Background = Brushes.Transparent;
+        AllowDrop = true;
+        DragOver += (_, e) => DragOverTarget(e, _pinned);
+        DragLeave += (_, _) => ClearDropHighlight();
+        Drop += (_, e) => DropOn(e, pin: true);
+        _overflowBorder.DragOver += (_, e) => DragOverTarget(e, _overflowIcons);
+        _overflowBorder.DragLeave += (_, _) => ClearDropHighlight();
+        _overflowBorder.Drop += (_, e) => DropOn(e, pin: false);
 
         ((INotifyCollectionChanged)_area.PinnedIcons).CollectionChanged += OnIconsChanged;
         ((INotifyCollectionChanged)_area.UnpinnedIcons).CollectionChanged += OnIconsChanged;
@@ -115,14 +126,45 @@ internal sealed class TrayControl : StackPanel, IDisposable
 
     internal void HostClicked() => _context.Bar.SetTrayHost();
 
-    private static void DragOverTarget(DragEventArgs e)
+    /// <summary>
+    /// Drags an icon (between the bar and the flyout, or to reorder). The flyout normally closes the moment
+    /// it loses the mouse, which a drag causes, so it's held open until the drag finishes.
+    /// </summary>
+    private void RunIconDrag(TrayIconElement source)
     {
-        e.Effects = e.Data.GetDataPresent(IconDragFormat) ? DragDropEffects.Move : DragDropEffects.None;
+        bool flyoutWasOpen = _overflow.IsOpen;
+        _overflow.StaysOpen = true;
+        try
+        {
+            DragDrop.DoDragDrop(source, new DataObject(IconDragFormat, source.Icon), DragDropEffects.Move);
+        }
+        finally
+        {
+            ClearDropHighlight();
+            // Restoring StaysOpen re-arms "close when clicking elsewhere"; close it if the drag opened it.
+            if (!flyoutWasOpen && _overflow.IsOpen && !_overflowBorder.IsMouseOver) _overflow.IsOpen = false;
+            _overflow.StaysOpen = false;
+        }
+    }
+
+    private void DragOverTarget(DragEventArgs e, Panel? highlight)
+    {
+        bool ours = e.Data.GetDataPresent(IconDragFormat);
+        e.Effects = ours ? DragDropEffects.Move : DragDropEffects.None;
         e.Handled = true;
+        ClearDropHighlight();
+        if (ours && highlight != null) highlight.Background = Ui.Res("AccentSoftBrush");
+    }
+
+    private void ClearDropHighlight()
+    {
+        _pinned.Background = Brushes.Transparent;
+        _overflowIcons.Background = Brushes.Transparent;
     }
 
     private void DropOn(DragEventArgs e, bool pin)
     {
+        ClearDropHighlight();
         if (e.Data.GetData(IconDragFormat) is not NotifyIcon icon) return;
         e.Handled = true;
         if (pin)
@@ -233,7 +275,7 @@ internal sealed class TrayControl : StackPanel, IDisposable
             if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance &&
                 Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance) return;
             _pressPoint = null;
-            DragDrop.DoDragDrop(this, new DataObject(IconDragFormat, Icon), DragDropEffects.Move);
+            _owner.RunIconDrag(this);
         }
 
         protected override void OnMouseEnter(MouseEventArgs e)

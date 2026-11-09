@@ -149,7 +149,7 @@ internal sealed class TaskButton : Border
     {
         var g = Group;
         var first = g.Windows.FirstOrDefault();
-        _icon.Source = g.Pin?.Icon ?? first?.Icon;
+        _icon.Source = g.Pin?.Icon ?? WindowIcons.For(first);
         _overlay.Source = first?.OverlayIcon;
         _title.Text = g.Windows.Count == 1 ? first!.Title : g.Name;
         ToolTip = g.Windows.Count > 1 ? null : g.Tooltip; // multi-window groups show the preview instead

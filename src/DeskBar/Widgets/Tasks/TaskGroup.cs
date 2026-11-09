@@ -57,8 +57,29 @@ public sealed class TaskGroup
         if (pinId != null && windowId != null)
             return string.Equals(pinId, windowId, StringComparison.OrdinalIgnoreCase);
         if (pin.TargetExe == null || WindowExe(w) is not { } exe) return false;
-        return pin.TargetExe == exe || IsRenamedCopy(pin.TargetExe, exe);
+        return pin.TargetExe == exe || IsRenamedCopy(pin.TargetExe, exe) || pin.TargetExe == LauncherExe(w);
     }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ApplicationWindow, System.Runtime.CompilerServices.StrongBox<string?>> Launchers = new();
+
+    /// <summary>
+    /// For windows owned by a helper process (Steam's steamwebhelper.exe), the program that started it
+    /// (steam.exe), lower-cased; otherwise null. Cached per window.
+    /// </summary>
+    public static string? LauncherExe(ApplicationWindow w) =>
+        Launchers.GetValue(w, window =>
+        {
+            string? launcher = null;
+            try
+            {
+                if (window.ProcId is { } pid) launcher = ProcessTree.LauncherExe(pid)?.ToLowerInvariant();
+            }
+            catch (Exception ex)
+            {
+                Log.Write($"Couldn't trace the launcher of window {window.Handle}: {ex.Message}");
+            }
+            return new System.Runtime.CompilerServices.StrongBox<string?>(launcher);
+        }).Value;
 
     private static readonly Dictionary<string, string?> OriginalNames = new(StringComparer.OrdinalIgnoreCase);
 
@@ -92,8 +113,30 @@ public sealed class TaskGroup
         if (w.IsUWP || PackagedApps.IsPackagedPath(exe))
             return appId == null ? null : new PinnedApp { AppUserModelId = appId, Name = Name }; // launched by id, survives updates
         if (string.IsNullOrEmpty(exe)) return null;
-        var pin = PinnedApp.FromPath(exe);
+        // Pin the real program, not a helper process that happens to own the window (Steam).
+        var pin = PinnedApp.FromPath(LauncherExe(w) is { } launcher ? ProperCasePath(launcher, exe) : exe);
         pin.AppUserModelId = appId; // keeps apps with explicit ids (Chrome profiles, etc.) matched correctly
         return pin;
+    }
+
+    /// <summary>
+    /// Repairs a pin that points at a helper process (e.g. a Steam pin made from its window before DeskBar
+    /// knew about helpers) to point at the program that launches it. Returns true if the pin changed.
+    /// </summary>
+    public static bool TryRetargetHelperPin(PinnedApp pin, ApplicationWindow w)
+    {
+        if (pin.IsPackaged || pin.TargetExe == null || pin.TargetExe != WindowExe(w)) return false;
+        if (LauncherExe(w) is not { } launcher || launcher == pin.TargetExe) return false;
+        var target = ProperCasePath(launcher, null);
+        Log.Write($"Pin '{pin.Name}' pointed at helper {pin.Path}; now launches {target}");
+        pin.RetargetTo(target);
+        return true;
+    }
+
+    /// <summary>Launcher paths are cached lower-case; get the on-disk casing back for display and storage.</summary>
+    private static string ProperCasePath(string path, string? fallback)
+    {
+        try { return new FileInfo(path).Exists ? Directory.GetFiles(Path.GetDirectoryName(path)!, Path.GetFileName(path)).FirstOrDefault() ?? path : fallback ?? path; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return path; }
     }
 }

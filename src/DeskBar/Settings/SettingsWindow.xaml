@@ -103,6 +103,8 @@
                         </DockPanel>
                         <TextBlock Style="{StaticResource Hint}" Margin="24,0,0,6"
                                    Text="An auto-hidden bar also shows over maximized windows. It stays hidden behind real full-screen content like videos and games." />
+                        <CheckBox Content="Show the bar when the Start menu opens (Win key)" IsChecked="{Binding ShowBarWithStartMenu}" />
+                        <CheckBox Content="Move the Start menu so it doesn't cover the bar" IsChecked="{Binding KeepStartMenuClearOfBar}" />
                         <CheckBox Content="Hide the Windows taskbar while DeskBar is running" IsChecked="{Binding HideWindowsTaskbar}" />
                         <CheckBox x:Name="AllMonitorsBox" Content="Show a bar on every monitor" IsChecked="{Binding ShowOnAllMonitors}" />
                         <CheckBox Content="Each monitor's bar only shows windows that are on that monitor" Margin="24,4,0,4"

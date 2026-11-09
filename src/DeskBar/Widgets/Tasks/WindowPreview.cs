@@ -156,7 +156,7 @@ internal sealed class WindowPreview
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.Children.Add(new Image { Source = w.Icon, Width = 16, Height = 16, Margin = new Thickness(0, 0, 8, 0) });
+        grid.Children.Add(new Image { Source = WindowIcons.For(w), Width = 16, Height = 16, Margin = new Thickness(0, 0, 8, 0) });
         var title = new TextBlock { Text = w.Title, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(title, 1);
         grid.Children.Add(title);

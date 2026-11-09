@@ -30,6 +30,8 @@ internal sealed class TaskListControl : Border, IDisposable
     private readonly Dictionary<object, TaskButton> _buttons = [];
     private readonly Dictionary<IntPtr, long> _firstSeen = [];
     private readonly HashSet<ApplicationWindow> _watched = [];
+    /// <summary>Pins already checked for pointing at a helper process (shared by all bars).</summary>
+    private static readonly HashSet<PinnedApp> RetargetChecked = [];
     private long _sequence;
     private bool _rebuildQueued;
 
@@ -147,6 +149,13 @@ internal sealed class TaskListControl : Border, IDisposable
                 }
             }
             group.Windows.Add(w);
+        }
+
+        // One-time repair of pins that point at a helper process (e.g. a Steam pin made from steamwebhelper.exe).
+        foreach (var group in groups.Where(g => g.Pin != null && g.IsRunning && RetargetChecked.Add(g.Pin)))
+        {
+            if (TaskGroup.TryRetargetHelperPin(group.Pin!, group.Windows[0]))
+                _context.Pins.Updated(group.Pin!);
         }
 
         // Reuse existing buttons so hover state and previews survive updates.

@@ -109,6 +109,18 @@ public sealed class PinnedApp
         }
     }
 
+    /// <summary>Points the pin at another program (keeping its app id), taking that program's name.</summary>
+    public void RetargetTo(string exePath)
+    {
+        Path = exePath;
+        Name = FromPath(exePath).Name;
+        _resolved = false;
+        _targetExe = null;
+        _linkAppId = null;
+        _isPackaged = false;
+        _icon = null;
+    }
+
     public static PinnedApp FromPath(string path)
     {
         var name = System.IO.Path.GetFileNameWithoutExtension(path);
@@ -182,6 +194,9 @@ public sealed class PinStore
         list.Insert(Math.Clamp(combinedIndex - offset, 0, list.Count), app);
         SaveAndNotify();
     }
+
+    /// <summary>Saves a pin that was changed in place (e.g. by <see cref="PinnedApp.RetargetTo"/>).</summary>
+    public void Updated(PinnedApp app) => SaveAndNotify();
 
     /// <summary>Moves a pin between "all desktops" and "this desktop".</summary>
     public void SetScope(PinnedApp app, PinScope scope, Guid desktopId)

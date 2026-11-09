@@ -49,6 +49,11 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+    public const uint MONITOR_DEFAULTTOPRIMARY = 1;
+
     /// <summary>True if the window is maximized.</summary>
     [DllImport("user32.dll")]
     public static extern bool IsZoomed(IntPtr hWnd);

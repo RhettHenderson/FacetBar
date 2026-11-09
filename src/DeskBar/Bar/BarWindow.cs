@@ -221,7 +221,17 @@ public sealed class BarWindow : AppBarWindow
     private bool IsTyping => IsKeyboardFocusWithin && Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase;
 
     protected override bool ShouldAllowAutoHide() =>
-        AppBarMode == AppBarMode.AutoHide && !_mouseOverBar && !_mouseNearEdge && !AnyPopupOpen && !IsTyping;
+        AppBarMode == AppBarMode.AutoHide && !_mouseOverBar && !_mouseNearEdge && !AnyPopupOpen && !IsTyping && !_startMenuOpen;
+
+    private bool _startMenuOpen;
+
+    /// <summary>The Start menu opened or closed on this bar's monitor: show an auto-hidden bar while it's open.</summary>
+    public void SetStartMenuOpen(bool open)
+    {
+        if (_startMenuOpen == open) return;
+        _startMenuOpen = open;
+        ReevaluateAutoHide();
+    }
 
     private void ReevaluateAutoHide()
     {

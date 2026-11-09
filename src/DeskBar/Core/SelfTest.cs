@@ -65,6 +65,24 @@ internal static class SelfTest
 
         Check("Widgets", () => string.Join(", ", WidgetRegistry.All.Select(w => w.Id)));
 
+        Check("Helper processes", () =>
+        {
+            // Steam's windows belong to steamwebhelper.exe; pins should launch steam.exe instead.
+            var helper = System.Diagnostics.Process.GetProcessesByName("steamwebhelper").FirstOrDefault();
+            if (helper == null) return "skipped (Steam isn't running)";
+            var launcher = ProcessTree.LauncherExe((uint)helper.Id);
+            if (launcher == null || !launcher.EndsWith(@"\steam.exe", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"steamwebhelper.exe traced to {launcher ?? "nothing"}, expected steam.exe");
+            return $"steamwebhelper.exe -> {launcher}";
+        });
+
+        Check("Start menu detection", () =>
+        {
+            var start = StartMenuMonitor.FindStartWindow();
+            // The self-test runs from a command line, so Start should be closed (its window cloaked).
+            return start == IntPtr.Zero ? "Start window correctly not found while closed" : $"found window {start:X} (Start open?)";
+        });
+
         Check("Renamed exe matching", () =>
         {
             // A running app whose exe was renamed (app.exe -> app.prev.exe) must still match its pin.

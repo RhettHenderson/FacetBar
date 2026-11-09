@@ -20,6 +20,7 @@ It's built on [ManagedShell](https://github.com/cairoshell/ManagedShell) (Apache
 The bar also:
 - **Position:** goes on any screen edge: bottom, top, left or right. On the left or right, the search box becomes a magnifier button, tray icons wrap into rows, and the side width is set in Settings.
 - **Scaling:** follows each monitor's Windows display scale. At 100% size it's as tall as the Windows 10 taskbar.
+- **Start menu:** pressing the Win key shows an auto-hidden bar, and DeskBar nudges the Start menu so it doesn't cover the bar. The Start menu draws above every normal window, so the bar can't sit on top of it. Both behaviors can be turned off in Settings.
 - **Auto-hide:** can slide away and reappear when the mouse comes within a set distance of the edge (12 px by default, adjustable in Settings). It also reappears over maximized windows, but stays out of the way of real full-screen content like videos and games.
 - **Monitors:** runs on every monitor, and every bar shows all your apps. Settings can limit each bar to the windows on its own monitor.
 - **Windows taskbar:** hides the Windows taskbar while it runs, and restores it when it exits, even after a crash.
@@ -56,6 +57,8 @@ If the old Linkbar-based version is running, DeskBar asks it to quit when it sta
 | Switch to or minimize a window | Click the app. If it has several windows, click to choose one from the thumbnails. |
 
 Pins are stored in `%APPDATA%\DeskBar\pins.json`.
+
+Some apps' windows belong to a helper program. Steam's windows, for example, come from `steamwebhelper.exe`, which `steam.exe` starts. Pinning such a window pins the program that launched the helper, and older pins that point at a helper are repaired automatically the next time the app is running. Windows that don't report an icon (common with games) show their program's icon instead.
 
 Store apps such as the new Outlook or Claude live in versioned folders under `C:\Program Files\WindowsApps` that change on every update. DeskBar pins and launches them by their app ID instead of by path. Older pins that point into `WindowsApps` are converted automatically when DeskBar loads them.
 
