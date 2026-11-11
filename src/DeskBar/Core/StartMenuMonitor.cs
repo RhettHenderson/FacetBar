@@ -18,7 +18,7 @@ internal sealed class StartMenuMonitor : IDisposable
     // `long` without [PreserveSig], so .NET expects an extra out-pointer Windows never passes and crashes the
     // whole process (access violation in coreclr) the first time the Start menu opens. RetroBar polls too.
     private readonly AppVisibilityHelper _visibility = new(false);
-    private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromMilliseconds(50) };
 
     public bool IsOpen { get; private set; }
 

@@ -101,6 +101,20 @@
                             <Slider Minimum="1" Maximum="60" TickFrequency="1" IsSnapToTickEnabled="True"
                                     Value="{Binding AutoHideRevealDistance}" VerticalAlignment="Center" />
                         </DockPanel>
+                        <DockPanel Margin="24,2,0,6" IsEnabled="{Binding IsChecked, ElementName=AutoHideBox}">
+                            <TextBlock Text="Hide this long after the mouse leaves" Style="{StaticResource Label}" />
+                            <TextBlock DockPanel.Dock="Right" Width="56" TextAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding AutoHideDelayMs, StringFormat={}{0} ms}" />
+                            <Slider Minimum="0" Maximum="2000" TickFrequency="25" IsSnapToTickEnabled="True"
+                                    Value="{Binding AutoHideDelayMs}" VerticalAlignment="Center" />
+                        </DockPanel>
+                        <DockPanel Margin="24,2,0,6" IsEnabled="{Binding IsChecked, ElementName=AutoHideBox}">
+                            <TextBlock Text="Hide this long after the Start menu closes" Style="{StaticResource Label}" />
+                            <TextBlock DockPanel.Dock="Right" Width="56" TextAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding StartMenuHideDelayMs, StringFormat={}{0} ms}" />
+                            <Slider Minimum="0" Maximum="1000" TickFrequency="10" IsSnapToTickEnabled="True"
+                                    Value="{Binding StartMenuHideDelayMs}" VerticalAlignment="Center" />
+                        </DockPanel>
                         <TextBlock Style="{StaticResource Hint}" Margin="24,0,0,6"
                                    Text="An auto-hidden bar also shows over maximized windows. It stays hidden behind real full-screen content like videos and games." />
                         <CheckBox Content="Show the bar when the Start menu opens (Win key)" IsChecked="{Binding ShowBarWithStartMenu}" />

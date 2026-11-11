@@ -74,6 +74,7 @@ public sealed class BarWindow : AppBarWindow
         Content = _root;
         AutoHideElement = _root;
         AutoHideShowMargin = 2;
+        AutoHideDelayMs = Math.Max(0, settings.AutoHideDelayMs);
 
         ApplyScale();
         BuildWidgets(settings);
@@ -225,12 +226,35 @@ public sealed class BarWindow : AppBarWindow
 
     private bool _startMenuOpen;
 
+    /// <summary>Slide-away time (ms) when hiding because Start closed: Start itself vanishes in about this long.</summary>
+    private const double StartMenuHideAnimationMs = 150;
+    private const double NormalHideAnimationMs = 300; // ManagedShell's default
+
     /// <summary>The Start menu opened or closed on this bar's monitor: show an auto-hidden bar while it's open.</summary>
     public void SetStartMenuOpen(bool open)
     {
         if (_startMenuOpen == open) return;
         _startMenuOpen = open;
-        ReevaluateAutoHide();
+        if (open)
+        {
+            ReevaluateAutoHide();
+            return;
+        }
+
+        // Closing Start: hide with Start's quicker timing. The base class reads these when it starts the
+        // slide animation (synchronously, inside ReevaluateAutoHide), so restore the normal mouse-away timing
+        // straight after.
+        AutoHideDelayMs = Math.Max(0, BarSettings.Current.StartMenuHideDelayMs);
+        AutoHideAnimationMs = StartMenuHideAnimationMs;
+        try
+        {
+            ReevaluateAutoHide();
+        }
+        finally
+        {
+            AutoHideDelayMs = Math.Max(0, BarSettings.Current.AutoHideDelayMs);
+            AutoHideAnimationMs = NormalHideAnimationMs;
+        }
     }
 
     private void ReevaluateAutoHide()

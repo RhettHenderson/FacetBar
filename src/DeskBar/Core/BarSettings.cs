@@ -39,6 +39,13 @@ public sealed class BarSettings
     public bool AutoHide { get; set; }
     /// <summary>An auto-hidden bar reappears when the mouse comes within this many pixels (at 100% scale) of its edge.</summary>
     public int AutoHideRevealDistance { get; set; } = 12;
+    /// <summary>How long (ms) an auto-hidden bar waits after the mouse leaves before sliding away.</summary>
+    public int AutoHideDelayMs { get; set; } = 400;
+    /// <summary>
+    /// How long (ms) the bar waits after the Start menu closes before sliding away. Start vanishes at once, so
+    /// the default is 0 with a quicker slide (see BarWindow.StartMenuHideAnimationMs).
+    /// </summary>
+    public int StartMenuHideDelayMs { get; set; }
     /// <summary>Show an auto-hidden bar while the Start menu is open (Win key), like the Windows taskbar.</summary>
     public bool ShowBarWithStartMenu { get; set; } = true;
     /// <summary>Nudge the Start menu so it doesn't cover the bar.</summary>
