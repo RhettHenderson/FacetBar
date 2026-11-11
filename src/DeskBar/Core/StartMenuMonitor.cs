@@ -45,32 +45,58 @@ internal sealed class StartMenuMonitor : IDisposable
     }
 
     /// <summary>The Start menu's window while it's showing, or zero.</summary>
-    public static IntPtr FindStartWindow()
-    {
-        IntPtr found = IntPtr.Zero;
-        var cls = new StringBuilder(256);
-        var title = new StringBuilder(256);
-        EnumWindows((hwnd, _) =>
-        {
-            if (!IsWindowVisible(hwnd)) return true;
-            GetClassName(hwnd, cls, cls.Capacity);
-            if (cls.ToString() != "Windows.UI.Core.CoreWindow") return true;
-            if (DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
+    public static IntPtr FindStartWindow() =>
+        FindShellWindows().FirstOrDefault(w => w.IsStart).Handle;
 
-            // Hosted by StartMenuExperienceHost (Windows 10 1903+) or ShellExperienceHost (older builds).
+    /// <summary>
+    /// The showing Start and Search windows. They're immersive "CoreWindow"s, which EnumWindows skips, so
+    /// they're found with FindWindowEx. Start's window covers its whole monitor (the menu is drawn inside it);
+    /// Search's window is just the size of its panel.
+    /// </summary>
+    public static List<(IntPtr Handle, bool IsStart)> FindShellWindows()
+    {
+        var found = new List<(IntPtr, bool)>();
+        var title = new StringBuilder(256);
+        IntPtr hwnd = IntPtr.Zero;
+        while ((hwnd = FindWindowEx(IntPtr.Zero, hwnd, "Windows.UI.Core.CoreWindow", null)) != IntPtr.Zero)
+        {
+            if (!IsWindowVisible(hwnd)) continue;
+            if (DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) continue;
+
             GetWindowThreadProcessId(hwnd, out uint pid);
             string? process = null;
             try { process = Process.GetProcessById((int)pid).ProcessName; }
             catch (ArgumentException) { }
             GetWindowText(hwnd, title, title.Capacity);
-            bool isStart = process is "StartMenuExperienceHost"
-                           || (process is "ShellExperienceHost" && title.ToString() == "Start");
-            if (!isStart) return true;
-            found = hwnd;
-            return false;
-        }, IntPtr.Zero);
+            // Start: StartMenuExperienceHost (Windows 10 1903+) or ShellExperienceHost (older builds).
+            if (process is "StartMenuExperienceHost" || (process is "ShellExperienceHost" && title.ToString() == "Start"))
+                found.Add((hwnd, true));
+            else if (process is "SearchApp" or "SearchHost" or "SearchUI")
+                found.Add((hwnd, false));
+        }
         return found;
     }
+
+    /// <summary>
+    /// The screen edge the (hidden) Windows taskbar sits on. Start draws its menu next to that edge, so it
+    /// only crowds DeskBar when both are on the same edge.
+    /// </summary>
+    public static BarEdge? ExplorerTaskbarEdge()
+    {
+        var tray = FindWindowEx(IntPtr.Zero, IntPtr.Zero, "Shell_TrayWnd", null);
+        if (tray == IntPtr.Zero || !Native.GetWindowRect(tray, out var t)) return null;
+        var monitor = System.Windows.Forms.Screen.FromHandle(tray).Bounds;
+        int width = t.Right - t.Left, height = t.Bottom - t.Top;
+        if (height >= width) return (t.Left + t.Right) / 2 > (monitor.Left + monitor.Right) / 2 ? BarEdge.Right : BarEdge.Left;
+        return (t.Top + t.Bottom) / 2 > (monitor.Top + monitor.Bottom) / 2 ? BarEdge.Bottom : BarEdge.Top;
+    }
+
+    /// <summary>Moves a window to an absolute position (physical pixels). Returns false if Windows refused.</summary>
+    public static bool MoveTo(IntPtr hwnd, int x, int y) =>
+        SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string? title);
 
     /// <summary>The Start menu's visible bounds in physical pixels (without the invisible resize border).</summary>
     public static Native.RECT? GetBounds(IntPtr start)
@@ -80,13 +106,21 @@ internal sealed class StartMenuMonitor : IDisposable
         return Native.GetWindowRect(start, out r) ? r : null;
     }
 
-    /// <summary>Moves the Start menu by the given offset (physical pixels). Returns false if Windows refused.</summary>
-    public static bool Move(IntPtr start, int dx, int dy)
+    /// <summary>
+    /// Puts Start's window back at its monitor's corner, where Windows keeps it. Used by --restore-taskbar,
+    /// in case DeskBar exited without undoing its nudge (Windows remembers the position).
+    /// </summary>
+    public static void ResetStartWindow()
     {
-        if (!Native.GetWindowRect(start, out var r)) return false;
-        return SetWindowPos(start, IntPtr.Zero, r.Left + dx, r.Top + dy, 0, 0,
-            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        var start = FindWindowEx(IntPtr.Zero, IntPtr.Zero, "Windows.UI.Core.CoreWindow", "Start");
+        if (start == IntPtr.Zero) return;
+        var monitor = System.Windows.Forms.Screen.FromHandle(start).Bounds;
+        MoveTo(start, monitor.Left, monitor.Top);
     }
+
+    /// <summary>Moves a window by an offset (physical pixels). Returns false if Windows refused.</summary>
+    public static bool Move(IntPtr hwnd, int dx, int dy) =>
+        Native.GetWindowRect(hwnd, out var r) && MoveTo(hwnd, r.Left + dx, r.Top + dy);
 
     public void Dispose()
     {

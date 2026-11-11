@@ -56,6 +56,7 @@ public partial class App : Application
             var explorer = new ManagedShell.AppBar.ExplorerHelper();
             TaskbarGuard.RecoverIfNeeded(explorer);
             explorer.SetTaskbarVisibility(0x0040 /* SWP_SHOWWINDOW */);
+            StartMenuMonitor.ResetStartWindow();
             Shutdown();
             return;
         }

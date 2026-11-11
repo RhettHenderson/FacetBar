@@ -10,7 +10,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>DeskBar</AssemblyName>
     <RootNamespace>DeskBar</RootNamespace>
-    <Version>2.6.0</Version>
+    <Version>2.7.0</Version>
     <Product>DeskBar</Product>
     <Description>A modular Windows taskbar replacement with per-virtual-desktop pinned apps.</Description>
     <!-- ManagedShell targets net6.0-windows; that asset runs fine on net8. -->

@@ -83,17 +83,18 @@ internal sealed class BarManager : IDisposable
             if (log) Log.Write("Start menu window not found");
             return;
         }
-        if (!settings.KeepStartMenuClearOfBar) return;
 
-        var bounds = StartMenuMonitor.GetBounds(start);
         var bar = _bars.FirstOrDefault(b => b.Screen.HMonitor == monitor);
-        if (bounds is not { } s || bar == null || !Native.GetWindowRect(bar.Handle, out var b)) return;
+        if (bar == null || !Native.GetWindowRect(bar.Handle, out var b)) return;
+        PlaceStartWindow(start, bar, b, settings, log);
 
-        // How far Start must move to stop overlapping the bar, away from the bar's edge.
-        bool overlapsAlong = s.Left < b.Right && s.Right > b.Left && s.Top < b.Bottom && s.Bottom > b.Top;
-        int dx = 0, dy = 0;
-        if (overlapsAlong)
+        // Search (typing in Start) has its own panel-sized window: move it only if it actually overlaps.
+        if (!settings.KeepStartMenuClearOfBar) return;
+        foreach (var (search, _) in StartMenuMonitor.FindShellWindows().Where(w => !w.IsStart))
         {
+            if (!Native.GetWindowRect(search, out var s)) continue;
+            if (!(s.Left < b.Right && s.Right > b.Left && s.Top < b.Bottom && s.Bottom > b.Top)) continue;
+            int dx = 0, dy = 0;
             switch (settings.Edge)
             {
                 case BarEdge.Right: dx = b.Left - s.Right; break;
@@ -101,18 +102,59 @@ internal sealed class BarManager : IDisposable
                 case BarEdge.Top: dy = b.Bottom - s.Top; break;
                 default: dy = b.Top - s.Bottom; break;
             }
+            bool ok = StartMenuMonitor.Move(search, dx, dy);
+            Log.Write($"Search panel {s.Left},{s.Top}-{s.Right},{s.Bottom} overlapped the bar; moved by {dx},{dy}: {(ok ? "ok" : "refused")}");
         }
-        if (dx == 0 && dy == 0)
+    }
+
+    /// <summary>Where Start's window was before DeskBar moved it, so it can be put back on exit.</summary>
+    private (IntPtr Handle, int X, int Y)? _startOrigin;
+
+    /// <summary>
+    /// Start's window covers its whole monitor and Windows draws the menu inside it, beside the (hidden)
+    /// Windows taskbar. The window is invisible but sits above every other window, DeskBar included. When
+    /// DeskBar is on the same edge as the Windows taskbar, slide the whole window in by the bar's width so
+    /// neither it nor the menu covers the bar. Windows remembers the position, so set it exactly each time.
+    /// </summary>
+    private void PlaceStartWindow(IntPtr start, BarWindow bar, Native.RECT b, BarSettings settings, bool log)
+    {
+        if (!Native.GetWindowRect(start, out var s)) return;
+        var screen = bar.Screen.Bounds;
+        int x = screen.Left, y = screen.Top;
+        var taskbarEdge = StartMenuMonitor.ExplorerTaskbarEdge();
+        if (settings.KeepStartMenuClearOfBar && taskbarEdge == settings.Edge)
         {
-            if (log) Log.Write($"Start menu at {s.Left},{s.Top}-{s.Right},{s.Bottom} clears the bar at {b.Left},{b.Top}-{b.Right},{b.Bottom}");
+            switch (settings.Edge)
+            {
+                case BarEdge.Right: x = screen.Left - (screen.Right - b.Left); break;
+                case BarEdge.Left: x = screen.Left + (b.Right - screen.Left); break;
+                case BarEdge.Top: y = screen.Top + (b.Bottom - screen.Top); break;
+                default: y = screen.Top - (screen.Bottom - b.Top); break;
+            }
+        }
+
+        if (s.Left == x && s.Top == y)
+        {
+            if (log) Log.Write($"Start menu window already at {x},{y} (Windows taskbar edge {taskbarEdge?.ToString() ?? "?"}, bar {b.Left},{b.Top}-{b.Right},{b.Bottom})");
             return;
         }
 
-        bool moved = StartMenuMonitor.Move(start, dx, dy);
-        var after = StartMenuMonitor.GetBounds(start);
-        Log.Write($"Start menu overlapped the bar (start {s.Left},{s.Top}-{s.Right},{s.Bottom}, bar {b.Left},{b.Top}-{b.Right},{b.Bottom}); " +
-                  $"moved by {dx},{dy}: {(moved ? "ok" : $"refused (error {System.Runtime.InteropServices.Marshal.GetLastPInvokeError()})")}" +
-                  (after is { } a ? $", now {a.Left},{a.Top}-{a.Right},{a.Bottom}" : ""));
+        bool ok = StartMenuMonitor.MoveTo(start, x, y);
+        int error = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
+        bool atOrigin = x == screen.Left && y == screen.Top;
+        _startOrigin = ok && !atOrigin ? (start, screen.Left, screen.Top) : null;
+        Log.Write($"Start menu window {s.Left},{s.Top}-{s.Right},{s.Bottom} moved to {x},{y} " +
+                  $"(Windows taskbar edge {taskbarEdge?.ToString() ?? "?"}, bar {b.Left},{b.Top}-{b.Right},{b.Bottom}): " +
+                  (ok ? "ok" : $"refused (error {error})"));
+    }
+
+    /// <summary>Puts Start's window back where Windows had it (on exit, so Start isn't left offset).</summary>
+    private void RestoreStartWindow()
+    {
+        if (_startOrigin is not { } o) return;
+        bool ok = StartMenuMonitor.MoveTo(o.Handle, o.X, o.Y);
+        Log.Write($"Start menu window restored to {o.X},{o.Y}: {(ok ? "ok" : "refused")}");
+        _startOrigin = null;
     }
 
     public IReadOnlyList<BarWindow> Bars => _bars;
@@ -172,6 +214,7 @@ internal sealed class BarManager : IDisposable
         _explorerDebounce.Stop();
         _startNudge.Stop();
         _startMenu.Dispose();
+        RestoreStartWindow();
         CloseAll();
     }
 }
